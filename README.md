@@ -342,6 +342,8 @@ for songs with nearby harmonic profiles rather than only nearby metadata labels.
 
 ## Hugging Face Space Deployment
 
+Live demo: [Harmonic Trends on Hugging Face Spaces](https://huggingface.co/spaces/juansalinas2/harmonic-trends).
+
 The interactive modules are packaged as a Hugging Face Static Space in
 `spaces/harmonic-trends/`. After creating a Hugging Face access token, deploy
 with:

@@ -1,12 +1,12 @@
 ---
 title: Harmonic Trends
 emoji: 🎼
-colorFrom: teal
+colorFrom: green
 colorTo: blue
 sdk: static
 app_file: index.html
 pinned: false
-short_description: Interactive harmonic n-gram explorers for popular music analysis.
+short_description: Harmonic n-gram explorers.
 ---
 
 # Harmonic Trends
