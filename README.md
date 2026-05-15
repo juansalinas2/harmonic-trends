@@ -203,47 +203,47 @@ for that direction of change.
 ### Genre has a measurable harmonic signature
 
 Genre differences are not only differences in instrumentation or production.
-Some harmonic families have high lift within specific genres compared with the
-rest of the corpus. Country, reggae, rap, and other genres show different
-signature families and different levels of concentration.
+Some harmonic `n`-grams are strongly overrepresented inside a genre compared
+with the rest of the corpus. This is a better signal than raw popularity: it
+surfaces patterns that are characteristic of a genre, not merely common
+everywhere.
 
-![Genre-specific harmonic families](docs/assets/genre_signature_lift.png)
+![Most distinctive harmonic n-gram by genre](docs/assets/genre_distinctive_ngrams.png)
 
-Lift compares a harmonic family's frequency inside one genre against the rest of
-the corpus. High lift identifies harmonic material that is unusually
-characteristic of a genre rather than merely common everywhere.
-
-### Genre structure appears in harmonic-vector space
-
-The embedding outputs can also be aggregated by genre. Each point below is a
-genre centroid: a weighted average of harmonic class embeddings for one genre
-and one `n`. This makes the genre question more precise. Instead of asking only
-"what are the most popular n-grams?", we can ask whether genres occupy different
-regions of harmonic space, and whether those separations change as the harmonic
-window gets longer.
-
-![Genre harmonic embedding centroids](docs/assets/genre_harmonic_embedding_centroids.png)
-
-The centroid plots suggest that genre is visible in the harmonic vocabulary, but
-not as a single fixed ordering. Some genres cluster differently depending on
-whether we look at short contexts such as `H3` or longer phrase windows such as
-`H7` and `H8`. That is useful for recommendation: a system can tune similarity
-to short harmonic gestures, longer phrase behavior, or a mixture of both.
+Lift compares an `n`-gram's frequency inside a genre against its smoothed
+frequency outside that genre. The chart shows the strongest supported example
+for each genre, along with its `H_n` length and raw support count. This makes the
+genre story concrete: jazz, soul, reggae, electronic, country, punk, metal, rap,
+and pop-oriented genres surface different harmonic signatures rather than the
+same global top patterns. The examples are meant to be read musically: rap
+leans toward a repeating Amin-F-Emin shape, reggae toward Amin-G/Amin-Dmin
+movement, country toward a D7-G-C-G cadence, and jazz toward dominant-seventh
+cycling. Those are not claims that every song in the genre uses that exact
+pattern; they are high-support examples of what the pipeline can recover when
+it asks for harmonic vocabulary instead of only popular chords.
 
 ### Harmonic classes can be embedded by usage
 
 The distributional embedding step treats each harmonic class like a term in a
 musical corpus. Classes that appear in similar song contexts land near each
 other in vector space, giving a basis for nearest-neighbor search,
-recommendation, clustering, and style-conditioned inference. The figure below
-shows separate song-context embedding maps for `H3` through `H8` so longer
-harmonic windows are visible instead of being collapsed into a single plot.
+recommendation, clustering, and style-conditioned inference.
+
+The figure below zooms into `H8` because long-context harmonic phrases are
+easier to read as musical examples. Gray points are common `H8` classes from the
+corpus, the dark callout marks a globally frequent loop, and the colored
+callouts mark genre-distinctive examples selected by lift. The point is that
+raw popularity and genre signal are different things: a common loop can be
+useful background grammar, while a rap Amin-F-Emin loop or a reggae
+Amin-Dmin-Emin loop is more useful as harmonic vocabulary for a style.
 
 ![Distributional map of common harmonic patterns](docs/assets/harmonic_embedding_pca.png)
 
-Each panel is a separate embedding map for one harmonic window length. Larger
-points are more frequent harmonic classes; numbered callouts mark the top three
-classes in that panel.
+This is the bridge to recommendation. A listener profile can be represented by
+the harmonic neighborhoods it tends to prefer, then queried against songs or
+artists with similar harmonic vocabularies. The embedding keeps broad
+co-occurrence structure, while the genre lift analysis supplies interpretable
+labels for why a recommendation might feel stylistically aligned.
 
 ## Why This Is Useful
 
