@@ -14,6 +14,19 @@ The central question is:
 > How has the harmonic vocabulary of popular music changed across time and
 > genre, and can that vocabulary support recommendation or prediction?
 
+## Executive Summary
+
+I built a pipeline that treats chord progressions like a musical language. Raw
+chord strings are cleaned into canonical song records, converted into exact
+chord `n`-grams, collapsed into harmonic classes, and stored in DuckDB for
+repeatable analysis. From there, the project measures decade-level change,
+genre-specific harmonic signatures, distributional similarity between harmonic
+patterns, and transition probabilities between harmonic states.
+
+The result is both an analysis project and a prototype data layer for future
+harmonic recommendation. Instead of recommending only by artist, genre, or audio
+surface, the system can compare songs by the harmonic vocabulary they use.
+
 ## Project Highlights
 
 - Built a reproducible Python/Jupyter pipeline from raw Chordonomicon data to
@@ -30,6 +43,22 @@ The central question is:
   behavior, creating the basis for similarity search and recommendation.
 - Prototyped a conditional model for predicting the next harmonic state from the
   current state plus metadata such as decade, genre, or artist.
+
+## Analysis Pipeline
+
+```mermaid
+flowchart LR
+    A["Raw chord and metadata records"] --> B["Chord parsing and normalization"]
+    B --> C["Canonical song table"]
+    C --> D["Exact chord n-grams V_n"]
+    D --> E["Harmonic classes H_n"]
+    E --> F["DuckDB analytical store"]
+    F --> G["Trend and genre analysis"]
+    F --> H["Distributional embeddings"]
+    F --> I["Conditional transition model"]
+    H --> J["Similarity search and recommendation"]
+    I --> J
+```
 
 ## What This Demonstrates
 
@@ -134,6 +163,10 @@ small set of common patterns.
 
 ![Decade harmonic diversity](docs/assets/decade_harmonic_diversity.png)
 
+The upper panel tracks effective vocabulary size; the lower panel tracks how
+much of each decade is covered by the five most common patterns. This separates
+"more available harmonic patterns" from "more evenly used harmonic patterns."
+
 ### Some harmonic families rise while older common loops decline
 
 The strongest supported increases include modern common-pop progressions such
@@ -141,6 +174,10 @@ as `G Amin F` and longer variants of `F C G Amin`. The strongest declines includ
 older tonic-dominant loops such as `G C G`, `C G C`, and repeated `G C` patterns.
 
 ![Largest supported harmonic rises and declines](docs/assets/decade_risers_decliners.png)
+
+Each bar shows the largest supported frequency movement for a given `n`. The
+point is not that one progression explains a decade, but that the pipeline can
+surface musically interpretable candidates for follow-up analysis.
 
 ### Genre has a measurable harmonic signature
 
@@ -151,14 +188,24 @@ signature families and different levels of concentration.
 
 ![Genre-specific harmonic families](docs/assets/genre_signature_lift.png)
 
+Lift compares a harmonic family's frequency inside one genre against the rest of
+the corpus. High lift identifies harmonic material that is unusually
+characteristic of a genre rather than merely common everywhere.
+
 ### Harmonic classes can be embedded by usage
 
 The distributional embedding step treats each harmonic class like a term in a
 musical corpus. Classes that appear in similar song contexts land near each
 other in vector space, giving a basis for nearest-neighbor search,
-recommendation, clustering, and style-conditioned inference.
+recommendation, clustering, and style-conditioned inference. The figure below
+shows separate song-context embedding maps for `H3` through `H8` so longer
+harmonic windows are visible instead of being collapsed into a single plot.
 
 ![Distributional map of common harmonic patterns](docs/assets/harmonic_embedding_pca.png)
+
+Each panel is a separate embedding map for one harmonic window length. Larger
+points are more frequent harmonic classes; numbered callouts mark the top three
+classes in that panel.
 
 ## Why This Is Useful
 
