@@ -332,9 +332,26 @@ for songs with nearby harmonic profiles rather than only nearby metadata labels.
 - `notebooks/utils/`: reusable parsing, normalization, n-gram, DuckDB, and trend
   analysis helpers.
 - `docs/assets/`: README charts generated from processed analysis outputs.
+- `spaces/harmonic-trends/`: Hugging Face Static Space bundle for the
+  interactive chart modules.
+- `scripts/deploy_hf_space.py`: deployment helper for uploading the static
+  Space with `huggingface_hub`.
 - `requirements.txt`: minimal Python dependencies for running the notebooks.
 - `data/`: ignored local data directory for raw downloads, DuckDB files, and
   generated outputs.
+
+## Hugging Face Space Deployment
+
+The interactive modules are packaged as a Hugging Face Static Space in
+`spaces/harmonic-trends/`. After creating a Hugging Face access token, deploy
+with:
+
+```bash
+HF_TOKEN=... python3 scripts/deploy_hf_space.py --repo-id USERNAME/harmonic-trends
+```
+
+The deployment script creates the Space if needed, uploads the static bundle,
+and prints the public Space URL.
 
 ## How To Reproduce The Analysis
 
