@@ -154,6 +154,25 @@ evidence-backed leads. The project favors careful measurable claims over broad
 claims about whether music is simply becoming better, worse, simpler, or more
 complex.
 
+### Common does not always mean informative
+
+The most frequent harmonic `n`-grams are often like the most frequent words in a
+text corpus: real, important, and structurally necessary, but not always the
+most diagnostic. In language, words like "the" or "and" tell us less about
+document identity than more specific terms. In this project, very common
+harmonic loops can behave the same way. The analysis therefore separates:
+
+- **stop-gram-like patterns:** globally common harmonic material that appears
+  across many songs, decades, and genres;
+- **signature patterns:** harmonic families with high lift or TF-IDF in a
+  particular genre, decade, or artist;
+- **distributional neighbors:** harmonic classes that occur in similar song
+  contexts, even if they are not the most frequent patterns overall.
+
+This is why the project does not stop at a top-`n` frequency table. Frequency is
+the starting point; specificity, context, and embeddings are where the more
+interesting musical signal appears.
+
 ### Harmonic vocabulary changes over time
 
 The corpus does not point to a simple "more complex" or "less complex" story.
@@ -177,7 +196,9 @@ older tonic-dominant loops such as `G C G`, `C G C`, and repeated `G C` patterns
 
 Each bar shows the largest supported frequency movement for a given `n`. The
 point is not that one progression explains a decade, but that the pipeline can
-surface musically interpretable candidates for follow-up analysis.
+surface musically interpretable candidates for follow-up analysis. If an `n`
+value has no bar on one side, no candidate passed the current support filters
+for that direction of change.
 
 ### Genre has a measurable harmonic signature
 
@@ -191,6 +212,23 @@ signature families and different levels of concentration.
 Lift compares a harmonic family's frequency inside one genre against the rest of
 the corpus. High lift identifies harmonic material that is unusually
 characteristic of a genre rather than merely common everywhere.
+
+### Genre structure appears in harmonic-vector space
+
+The embedding outputs can also be aggregated by genre. Each point below is a
+genre centroid: a weighted average of harmonic class embeddings for one genre
+and one `n`. This makes the genre question more precise. Instead of asking only
+"what are the most popular n-grams?", we can ask whether genres occupy different
+regions of harmonic space, and whether those separations change as the harmonic
+window gets longer.
+
+![Genre harmonic embedding centroids](docs/assets/genre_harmonic_embedding_centroids.png)
+
+The centroid plots suggest that genre is visible in the harmonic vocabulary, but
+not as a single fixed ordering. Some genres cluster differently depending on
+whether we look at short contexts such as `H3` or longer phrase windows such as
+`H7` and `H8`. That is useful for recommendation: a system can tune similarity
+to short harmonic gestures, longer phrase behavior, or a mixture of both.
 
 ### Harmonic classes can be embedded by usage
 
