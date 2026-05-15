@@ -272,6 +272,11 @@ Open the interactive version here: [H8 harmonic embedding explorer](docs/h8_harm
 It lets the reader hover over any point to inspect the full harmonic `n`-gram,
 global support, and genre lift when the point is a signature example.
 
+Explore the effect of changing window length here: [harmonic n-gram embedding explorer](docs/ngram_embedding_explorer.html).
+This version lets the reader move from `H3` to `H8`, switch between song-level
+and local co-occurrence context, and hover over each point to inspect the
+example progression.
+
 This is the bridge to recommendation. A listener profile can be represented by
 the harmonic neighborhoods it tends to prefer, then queried against songs or
 artists with similar harmonic vocabularies. The embedding keeps broad
