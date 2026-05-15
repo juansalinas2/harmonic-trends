@@ -83,7 +83,7 @@
 
     .grid {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 18px;
     }
 
@@ -106,6 +106,56 @@
       object-position: center;
       border-bottom: 1px solid var(--line);
       background: #eef2f4;
+    }
+
+    .card img.embedding-thumb {
+      object-position: 52% 42%;
+      transform: scale(1.16);
+    }
+
+    .card img.genre-thumb {
+      object-position: 52% 34%;
+    }
+
+    .preview {
+      aspect-ratio: 16 / 9;
+      border-bottom: 1px solid var(--line);
+      background: #eef2f4;
+      padding: 18px;
+      display: grid;
+      align-content: center;
+      gap: 10px;
+    }
+
+    .mini-context,
+    .mini-row {
+      border: 1px solid #d5dde2;
+      border-radius: 8px;
+      background: #fff;
+      padding: 9px 10px;
+    }
+
+    .mini-context span,
+    .mini-row span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.74rem;
+      margin-bottom: 4px;
+    }
+
+    .mini-context code,
+    .mini-row code {
+      color: var(--ink);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-weight: 700;
+    }
+
+    .mini-bar {
+      height: 10px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--teal), var(--warm));
+      margin-top: 7px;
+      width: 76%;
     }
 
     .card-body {
@@ -156,7 +206,13 @@
       margin-bottom: 8px;
     }
 
-    @media (max-width: 760px) {
+    @media (max-width: 980px) {
+      .grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 720px) {
       .grid {
         grid-template-columns: 1fr;
       }
@@ -168,20 +224,50 @@
     <header>
       <h1>Harmonic Trends</h1>
       <p class="lede">
-        Musicians remember harmonic phrases and reuse them in new settings. This
-        project turns chord-sequence data into interactive views of that
-        vocabulary: what is common, what is genre-specific, and how phrase
-        length changes the picture.
+        Musicians remember harmonic phrases, the contexts where they work, and
+        the continuations that feel natural. This Space turns chord-sequence
+        data into interactive views of that vocabulary: what is common, what is
+        genre-specific, how phrase length changes the picture, and what tends
+        to come next.
       </p>
       <div class="actions">
-        <a class="button" href="ngram_embedding_explorer.html">Open N-Gram Explorer</a>
+        <a class="button" href="harmonic_continuation_explorer.html">Start With Continuations</a>
         <a class="button secondary" href="h8_harmonic_embedding_interactive.html">Open H8 Genre Explorer</a>
+        <a class="button secondary" href="ngram_embedding_explorer.html">Open N-Gram Explorer</a>
       </div>
     </header>
 
     <section class="grid" aria-label="Interactive modules">
       <article class="card">
-        <img src="assets/harmonic_embedding_pca.png" alt="H8 harmonic embedding with genre-signature callouts">
+        <div class="preview" aria-hidden="true">
+          <div class="mini-context">
+            <span>remembered context</span>
+            <code>G C G</code>
+          </div>
+          <div class="mini-row">
+            <span>#1 continuation adds C</span>
+            <code>C G C</code>
+            <div class="mini-bar"></div>
+          </div>
+        </div>
+        <div class="card-body">
+          <h2>Continuation Explorer</h2>
+          <p>
+            Select a remembered harmonic phrase, condition on the global corpus
+            or a genre, and inspect the overlapping phrases that most often
+            follow. This is the clearest bridge from analysis to prediction.
+          </p>
+          <div class="tag-row">
+            <span class="tag">prediction</span>
+            <span class="tag">genre-conditioned</span>
+            <span class="tag">H3-H5</span>
+          </div>
+          <a class="button" href="harmonic_continuation_explorer.html">Explore Continuations</a>
+        </div>
+      </article>
+
+      <article class="card">
+        <img class="embedding-thumb" src="assets/harmonic_embedding_pca.png" alt="H8 harmonic embedding with genre-signature callouts">
         <div class="card-body">
           <h2>H8 Genre Signatures</h2>
           <p>
@@ -199,7 +285,7 @@
       </article>
 
       <article class="card">
-        <img src="assets/genre_distinctive_ngrams.png" alt="Bar chart of distinctive harmonic n-grams by genre">
+        <img class="genre-thumb" src="assets/genre_distinctive_ngrams.png" alt="Bar chart of distinctive harmonic n-grams by genre">
         <div class="card-body">
           <h2>N-Gram Window Explorer</h2>
           <p>

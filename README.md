@@ -277,6 +277,11 @@ This version lets the reader move from `H3` to `H8`, switch between song-level
 and local co-occurrence context, and hover over each point to inspect the
 example progression.
 
+Explore likely continuations here: [harmonic continuation explorer](docs/harmonic_continuation_explorer.html).
+This module makes the prediction story concrete: select a remembered harmonic
+phrase, condition on the global corpus or a genre, and inspect the overlapping
+phrases that most often follow.
+
 This is the bridge to recommendation. A listener profile can be represented by
 the harmonic neighborhoods it tends to prefer, then queried against songs or
 artists with similar harmonic vocabularies. The embedding keeps broad
