@@ -1,50 +1,71 @@
-# harmonic-trends
+# Harmonic Trends
 
-An end-to-end data analysis project on harmonic language in popular music.
+Musicians do not learn harmony as isolated chord names. They learn songs, notice
+phrases that carry a feeling, remember the musical context around those phrases,
+and reuse that vocabulary somewhere else. A songwriter might internalize the
+pull of a dominant cycle, the mood of a minor loop, or the lift of a familiar
+pop progression, then reshape it in a new key, genre, or arrangement.
 
-This project starts with messy chord-sequence data and turns it into a durable
-analysis pipeline: raw data ingestion, chord normalization, harmonic feature
-engineering, DuckDB-backed aggregation, trend analysis, distributional
-embeddings, and a first-pass conditional language model. The goal is to show how
-unstructured musical data can be cleaned, modeled, and turned into useful
-evidence for search, recommendation, and inference.
+This project builds the data foundation for a computer to do a version of that.
+It takes messy chord-sequence data and turns it into a system that can recognize
+harmonic phrases, compare how they are used, measure when they become
+genre-specific, and prepare them for recommendation or prediction.
 
-The central question is:
+The guiding question:
 
-> How has the harmonic vocabulary of popular music changed across time and
-> genre, and can that vocabulary support recommendation or prediction?
+> Can we treat harmony as a learnable vocabulary, then use that vocabulary to
+> understand musical style, change over time, and recommend songs by how they
+> move harmonically?
 
-## Executive Summary
+## What I Built
 
-I built a pipeline that treats chord progressions like a musical language. Raw
-chord strings are cleaned into canonical song records, converted into exact
-chord `n`-grams, collapsed into harmonic classes, and stored in DuckDB for
-repeatable analysis. From there, the project measures decade-level change,
-genre-specific harmonic signatures, distributional similarity between harmonic
-patterns, and transition probabilities between harmonic states.
+I built an end-to-end Python/Jupyter analysis pipeline that treats chord
+progressions like a musical language. Raw chord strings are cleaned into
+canonical song records, converted into exact chord `n`-grams, collapsed into
+harmonic classes, and stored in DuckDB for repeatable analysis.
 
-The result is both an analysis project and a prototype data layer for future
-harmonic recommendation. Instead of recommending only by artist, genre, or audio
-surface, the system can compare songs by the harmonic vocabulary they use.
+From there, the project asks five concrete questions:
+
+- Which harmonic patterns become more or less common over time?
+- Which patterns are common everywhere, but not very diagnostic?
+- Which phrases are unusually characteristic of a genre?
+- Which harmonic classes appear in similar song contexts?
+- Can a current harmonic state help predict a likely next state?
+
+The result is both a polished analysis project and a prototype data layer for
+future harmonic recommendation. Instead of recommending only by artist, genre,
+or audio surface, the system can compare songs by the harmonic vocabulary they
+use.
+
+## Why This Matters
+
+Most music recommendation systems lean on metadata, listening behavior, audio
+features, or artist similarity. Those signals are useful, but they often miss a
+specific musical reason a listener likes something: the harmonic language.
+
+If a listener likes the harmony of several artists, even across different
+genres, this pipeline points toward a way to represent that taste directly. A
+future system could say: this user tends to like songs built from these harmonic
+phrases, in these contexts, with these kinds of continuations. That is the
+foundation for recommendation, search, and style-conditioned inference.
 
 ## Project Highlights
 
-- Built a reproducible Python/Jupyter pipeline from raw Chordonomicon data to
-  analysis-ready tables.
-- Normalized chord strings into comparable harmonic representations instead of
-  relying only on literal chord spelling or key.
-- Constructed exact chord `n`-gram vocabularies and collapsed them into
-  transposition-normalized harmonic classes.
-- Stored global counts, metadata-stratified counts, document-term tables, and
-  exact-to-harmonic mappings in DuckDB.
-- Produced interpretable findings about decade shifts, genre signatures,
-  harmonic diversity, and concentration.
+- Cleaned noisy chord and metadata records into analysis-ready song tables.
+- Designed harmonic `n`-gram features that preserve musical structure while
+  allowing large-scale comparison.
+- Built DuckDB-backed global counts, stratified counts, document-term tables,
+  and exact-to-harmonic mappings.
+- Reframed vague questions about musical "complexity" into measurable ideas:
+  vocabulary size, concentration, specificity, change, and predictability.
+- Produced readable findings about decade shifts, genre signatures, harmonic
+  diversity, and recommendation use cases.
 - Built distributional embeddings of harmonic classes from co-occurrence
-  behavior, creating the basis for similarity search and recommendation.
-- Prototyped a conditional model for predicting the next harmonic state from the
-  current state plus metadata such as decade, genre, or artist.
+  behavior, creating the basis for similarity search.
+- Prototyped a conditional harmonic language model for predicting continuations
+  from harmonic state plus metadata.
 
-## Analysis Pipeline
+## Pipeline At A Glance
 
 ```mermaid
 flowchart LR
@@ -64,7 +85,8 @@ flowchart LR
 
 This repository is meant to show more than a set of charts. It demonstrates the
 kind of end-to-end analytical work needed when the interesting signal is buried
-inside messy, domain-specific data.
+inside messy, domain-specific data and has to be made measurable before it can
+be modeled.
 
 - **Data cleaning:** turning scraped chord strings and inconsistent metadata
   into a canonical dataset.
@@ -87,7 +109,7 @@ inside messy, domain-specific data.
 - Sparse matrices, PPMI, SVD, and PCA for harmonic embeddings
 - Count-based conditional language modeling for harmonic-state prediction
 
-## Why Harmonic N-Grams?
+## Core Idea: Harmonic N-Grams
 
 The core representation is the harmonic `n`-gram. This borrows from language
 modeling: a song is a sequence, and short windows of that sequence become units
@@ -101,10 +123,10 @@ There are two connected vocabularies:
 
 This matters because a literal chord progression is often too specific. The same
 harmonic idea can appear in different keys or surface spellings. By mapping
-`V_n -> H_n`, the analysis can study harmonic behavior rather than only chord
-labels. The fibers of that map are also useful: for a harmonic class, we can ask
-which exact progressions realize it, which genres use it, and how its usage
-changes over time.
+`V_n -> H_n`, the analysis studies harmonic behavior rather than only chord
+labels. The fibers of that map are also useful: once many exact progressions map
+to the same harmonic class, we can ask which spellings realize that class, which
+genres use it, and how its usage changes over time.
 
 The project avoids treating "complexity" as a vague single score. Instead, it
 breaks harmonic organization into measurable pieces:
@@ -121,14 +143,16 @@ breaks harmonic organization into measurable pieces:
   current state and metadata.
 
 Across sequence length, truncation maps such as `H_n -> H_{n-1}` let us ask how
-shorter harmonic contexts extend into longer phrases. Those fibers are the basis
-for prediction and for comparing harmonic organization across genres and eras.
+shorter harmonic contexts extend into longer phrases. That is the prediction
+setup: given a remembered harmonic context, what continuations are likely, and
+how does that answer change by genre, decade, or artist?
 
 ## Data Work
 
-The raw input is not analysis-ready. It includes chord strings, section markers,
-metadata fields, missing values, repeated artists, sparse genres, and large
-intermediate tables. The pipeline turns that into a reliable analytical store.
+The raw input is not analysis-ready. It contains chord strings, section markers,
+inconsistent metadata, missing values, repeated artists, sparse genre labels,
+and intermediate tables that become too large for casual notebook work. A major
+part of this project is turning that material into a reliable analytical store.
 
 Key data steps:
 
@@ -144,15 +168,17 @@ Key data steps:
 - Persist outputs in DuckDB so later notebooks can query the same source of
   truth.
 
-This is the main portfolio value of the project: it demonstrates the full path
-from messy domain-specific data to a structured, reproducible analysis.
+This is the main portfolio value of the project: the findings are only possible
+because the messy musical source data was cleaned, normalized, structured, and
+made queryable first.
 
 ## Findings
 
-These findings come from the generated analysis tables and are intended as
-evidence-backed leads. The project favors careful measurable claims over broad
-claims about whether music is simply becoming better, worse, simpler, or more
-complex.
+These findings come from the generated analysis tables. They are framed as
+evidence-backed leads rather than sweeping claims about whether music is simply
+becoming better, worse, simpler, or more complex. The more interesting story is
+that harmonic vocabulary changes by context: some patterns are global grammar,
+some are era markers, and some become genre signatures.
 
 ### Common does not always mean informative
 
@@ -160,7 +186,9 @@ The most frequent harmonic `n`-grams are often like the most frequent words in a
 text corpus: real, important, and structurally necessary, but not always the
 most diagnostic. In language, words like "the" or "and" tell us less about
 document identity than more specific terms. In this project, very common
-harmonic loops can behave the same way. The analysis therefore separates:
+harmonic loops can behave the same way.
+
+The analysis therefore separates:
 
 - **stop-gram-like patterns:** globally common harmonic material that appears
   across many songs, decades, and genres;
@@ -170,8 +198,8 @@ harmonic loops can behave the same way. The analysis therefore separates:
   contexts, even if they are not the most frequent patterns overall.
 
 This is why the project does not stop at a top-`n` frequency table. Frequency is
-the starting point; specificity, context, and embeddings are where the more
-interesting musical signal appears.
+the starting point; specificity, context, and embeddings are where the musical
+signal becomes useful.
 
 ### Harmonic vocabulary changes over time
 
@@ -182,9 +210,10 @@ small set of common patterns.
 
 ![Decade harmonic diversity](docs/assets/decade_harmonic_diversity.png)
 
-The upper panel tracks effective vocabulary size; the lower panel tracks how
-much of each decade is covered by the five most common patterns. This separates
-"more available harmonic patterns" from "more evenly used harmonic patterns."
+Read the two panels together. The upper panel tracks effective vocabulary size;
+the lower panel tracks how much of each decade is covered by the five most
+common patterns. This separates "more available harmonic patterns" from "more
+evenly used harmonic patterns."
 
 ### Some harmonic families rise while older common loops decline
 
@@ -245,22 +274,24 @@ artists with similar harmonic vocabularies. The embedding keeps broad
 co-occurrence structure, while the genre lift analysis supplies interpretable
 labels for why a recommendation might feel stylistically aligned.
 
-## Why This Is Useful
+## Stakeholders And Use Cases
 
 This project is useful anywhere the harmonic vocabulary of a song matters, not
 just its artist, genre tag, or audio surface.
 
-- **Music recommendation:** represent songs, artists, or users by the harmonic
-  `n`-grams they use or enjoy. If a listener likes the harmony of artists A, B,
-  and C, the system can recommend songs with similar harmonic vocabulary even
-  across genre boundaries.
-- **Inference and prediction:** estimate likely next harmonic states from a
-  current harmonic context, optionally conditioned on decade, genre, or artist.
-- **Catalog analysis:** compare artists, genres, and eras by harmonic vocabulary
-  rather than only metadata labels.
-- **Musicological search:** find songs or genres that share a harmonic family,
-  locate unusually genre-specific patterns, or inspect how a pattern changes
-  over time.
+- **Listeners and recommenders:** represent songs, artists, or users by the
+  harmonic `n`-grams they use or enjoy. If a listener likes the harmony of
+  artists A, B, and C, the system can recommend songs with similar harmonic
+  vocabulary even across genre boundaries.
+- **Songwriters and producers:** search for harmonic neighborhoods: songs that
+  share a phrase shape, genres where a pattern is especially characteristic, or
+  continuations that fit a given harmonic context.
+- **Catalog and A&R teams:** compare artists, eras, and genres by harmonic
+  vocabulary rather than only metadata labels.
+- **Musicologists and analysts:** inspect how specific harmonic families rise,
+  fall, cluster, or become genre-specific over time.
+- **Inference systems:** estimate likely next harmonic states from a current
+  context, optionally conditioned on decade, genre, or artist.
 
 For recommendation specifically, the harmonic-vocabulary angle is the important
 piece. A listener may enjoy the harmonic behavior of several artists even when
@@ -285,7 +316,7 @@ for songs with nearby harmonic profiles rather than only nearby metadata labels.
 - Add uncertainty estimates for trend and genre-lift claims before treating
   findings as final.
 
-## Repository Structure
+## Repository Guide
 
 - `notebooks/`: ordered notebooks for ingestion, cleaning, feature engineering,
   analysis, embeddings, and modeling.
@@ -296,7 +327,7 @@ for songs with nearby harmonic profiles rather than only nearby metadata labels.
 - `data/`: ignored local data directory for raw downloads, DuckDB files, and
   generated outputs.
 
-## Notebook Pipeline
+## How To Reproduce The Analysis
 
 Run the notebooks in order. Notebooks `00` and `01` prepare the source data; the
 remaining notebooks build and analyze the harmonic vocabulary.
@@ -305,16 +336,19 @@ remaining notebooks build and analyze the harmonic vocabulary.
    Downloads the Chordonomicon dataset into `data/raw/`.
 
 1. `notebooks/01_build_canonical_dataset.ipynb`
-   Normalizes the source data into a canonical song table for downstream analysis.
+   Normalizes the source data into a canonical song table for downstream
+   analysis.
 
 2. `notebooks/02_build_ngram_dataset.ipynb`
-   Builds global exact and harmonic n-gram vocabularies, then writes `V_n`, `H_n`, `O_n`, and `bar O_n` directly into DuckDB.
+   Builds global exact and harmonic n-gram vocabularies, then writes `V_n`,
+   `H_n`, `O_n`, and `bar O_n` directly into DuckDB.
 
 3. `notebooks/03_build_frequency_objects.ipynb`
    Validates and inspects the global DuckDB store.
 
 4. `notebooks/04_stratified_ngram_trends.ipynb`
-   Tracks a small fixed set of globally common targets across year, decade, and genre.
+   Tracks a small fixed set of globally common targets across year, decade, and
+   genre.
 
 5. `notebooks/05_analyze_stratified_trends.ipynb`
    Analyzes the target-limited trend tables from notebook 4.
@@ -323,19 +357,30 @@ remaining notebooks build and analyze the harmonic vocabulary.
    Turns target-limited trends into interpretable candidate findings.
 
 7. `notebooks/07_build_harmonic_document_terms.ipynb`
-   Builds the broader support-thresholded document-term table needed for corpus-linguistic statistics.
+   Builds the broader support-thresholded document-term table needed for
+   corpus-linguistic statistics.
 
 8. `notebooks/08_corpus_linguistic_occurrence_analysis.ipynb`
-   Computes document frequency, stop-gram candidates, TF-IDF, entropy, and one-vs-rest enrichment.
+   Computes document frequency, stop-gram candidates, TF-IDF, entropy, and
+   one-vs-rest enrichment.
 
 9. `notebooks/09_ultimate_harmonic_eda.ipynb`
-   Pulls the distilled outputs together into a report-style EDA: rising/falling harmonic families, diversity and concentration through time, genre vocabulary breadth, signature terms, regime shifts, and bounded artist-level vocabulary profiling.
+   Pulls the distilled outputs together into a report-style EDA: rising/falling
+   harmonic families, diversity and concentration through time, genre vocabulary
+   breadth, signature terms, regime shifts, and bounded artist-level vocabulary
+   profiling.
 
 10. `notebooks/10_harmonic_distributional_embeddings.ipynb`
-   Builds distributional embeddings of harmonic `n`-gram classes from co-occurrence graphs: song/local context counts, PPMI matrices, SVD embeddings, nearest-neighbor inspection, structural-vs-distributional comparison, and genre centroids.
+   Builds distributional embeddings of harmonic `n`-gram classes from
+   co-occurrence graphs: song/local context counts, PPMI matrices, SVD
+   embeddings, nearest-neighbor inspection, structural-vs-distributional
+   comparison, and genre centroids.
 
 11. `notebooks/11_conditional_harmonic_language_modeling.ipynb`
-    Builds an interpretable conditional language model over harmonic states: adjacent `H_n(t) -> H_n(t+1)` transitions, global/decade/genre/artist scoped counts, support-aware backoff interpolation, holdout evaluation, and style-conditioned continuation examples.
+    Builds an interpretable conditional language model over harmonic states:
+    adjacent `H_n(t) -> H_n(t+1)` transitions, global/decade/genre/artist scoped
+    counts, support-aware backoff interpolation, holdout evaluation, and
+    style-conditioned continuation examples.
 
 ## Data
 
