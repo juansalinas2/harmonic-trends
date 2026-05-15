@@ -13,16 +13,16 @@ genre-specific, and prepare them for recommendation or prediction.
 
 The guiding question:
 
-> Can we treat harmony as a learnable vocabulary, then use that vocabulary to
-> understand musical style, change over time, and recommend songs by how they
-> move harmonically?
+> Can harmony be treated as a learnable vocabulary, then used to understand
+> musical style, change over time, and recommend songs by how they move
+> harmonically?
 
-## What I Built
+## What Is Built
 
-I built an end-to-end Python/Jupyter analysis pipeline that treats chord
-progressions like a musical language. Raw chord strings are cleaned into
-canonical song records, converted into exact chord `n`-grams, collapsed into
-harmonic classes, and stored in DuckDB for repeatable analysis.
+This repository contains an end-to-end Python/Jupyter analysis pipeline that
+treats chord progressions like a musical language. Raw chord strings are cleaned
+into canonical song records, converted into exact chord `n`-grams, collapsed
+into harmonic classes, and stored in DuckDB for repeatable analysis.
 
 From there, the project asks five concrete questions:
 
@@ -76,9 +76,9 @@ flowchart LR
     E --> F["DuckDB analytical store"]
     F --> G["Trend and genre analysis"]
     F --> H["Distributional embeddings"]
-    F --> I["Conditional transition model"]
+    F --> K["Conditional transition model"]
     H --> J["Similarity search and recommendation"]
-    I --> J
+    K --> J
 ```
 
 ## What This Demonstrates
@@ -113,7 +113,7 @@ be modeled.
 
 The core representation is the harmonic `n`-gram. This borrows from language
 modeling: a song is a sequence, and short windows of that sequence become units
-we can count, compare, embed, and model.
+that can be counted, compared, embedded, and modeled.
 
 There are two connected vocabularies:
 
@@ -125,8 +125,8 @@ This matters because a literal chord progression is often too specific. The same
 harmonic idea can appear in different keys or surface spellings. By mapping
 `V_n -> H_n`, the analysis studies harmonic behavior rather than only chord
 labels. The fibers of that map are also useful: once many exact progressions map
-to the same harmonic class, we can ask which spellings realize that class, which
-genres use it, and how its usage changes over time.
+to the same harmonic class, the analysis can ask which spellings realize that
+class, which genres use it, and how its usage changes over time.
 
 The project avoids treating "complexity" as a vague single score. Instead, it
 breaks harmonic organization into measurable pieces:
@@ -142,10 +142,10 @@ breaks harmonic organization into measurable pieces:
 - **Predictability:** how well the next harmonic state can be estimated from the
   current state and metadata.
 
-Across sequence length, truncation maps such as `H_n -> H_{n-1}` let us ask how
-shorter harmonic contexts extend into longer phrases. That is the prediction
-setup: given a remembered harmonic context, what continuations are likely, and
-how does that answer change by genre, decade, or artist?
+Across sequence length, truncation maps such as `H_n -> H_{n-1}` make it
+possible to ask how shorter harmonic contexts extend into longer phrases. That
+is the prediction setup: given a remembered harmonic context, what continuations
+are likely, and how does that answer change by genre, decade, or artist?
 
 ## Data Work
 
@@ -184,9 +184,9 @@ some are era markers, and some become genre signatures.
 
 The most frequent harmonic `n`-grams are often like the most frequent words in a
 text corpus: real, important, and structurally necessary, but not always the
-most diagnostic. In language, words like "the" or "and" tell us less about
-document identity than more specific terms. In this project, very common
-harmonic loops can behave the same way.
+most diagnostic. In language, words like "the" or "and" carry less information
+about document identity than more specific terms do. In this project, very
+common harmonic loops can behave the same way.
 
 The analysis therefore separates:
 
@@ -267,6 +267,10 @@ useful background grammar, while a rap Amin-F-Emin loop or a reggae
 Amin-Dmin-Emin loop is more useful as harmonic vocabulary for a style.
 
 ![Distributional map of common harmonic patterns](docs/assets/harmonic_embedding_pca.png)
+
+Open the interactive version here: [H8 harmonic embedding explorer](docs/h8_harmonic_embedding_interactive.html).
+It lets the reader hover over any point to inspect the full harmonic `n`-gram,
+global support, and genre lift when the point is a signature example.
 
 This is the bridge to recommendation. A listener profile can be represented by
 the harmonic neighborhoods it tends to prefer, then queried against songs or
