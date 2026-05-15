@@ -15,8 +15,9 @@ Interactive figures for exploring harmonic n-grams in popular music.
 
 This Space hosts three static explorers:
 
-- **H8 harmonic embedding:** genre-signature examples versus globally frequent
-  loops, with hover details for full n-grams and support counts.
+- **Harmonic style lens explorer:** genre-signature and decade-signature
+  examples versus globally frequent loops from `H3` through `H8`, with hover
+  details for full n-grams and support counts.
 - **Harmonic n-gram embedding explorer:** an interactive view for changing the
   harmonic window length from `H3` through `H8`.
 - **Harmonic continuation explorer:** a count-based view of likely next

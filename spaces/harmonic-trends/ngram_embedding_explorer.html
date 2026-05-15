@@ -42,11 +42,12 @@
     .tick { fill: #4a5055; font-size: 12px; }
     .axis-label { fill: var(--ink); font-weight: 700; font-size: 17px; }
     .point { fill: #9da9b1; opacity: 0.36; cursor: crosshair; transition: opacity 120ms ease, r 120ms ease, fill 120ms ease; }
+    .hit { fill: transparent; cursor: crosshair; }
     .point.top { fill: var(--warm); opacity: 0.88; stroke: white; stroke-width: 1.4; }
     .point.match { fill: var(--accent); opacity: 0.95; stroke: white; stroke-width: 1.4; }
     .point.hidden { display: none; }
     .point.active { opacity: 1; stroke: #101315; stroke-width: 2.2; }
-    .tooltip { position: absolute; transform: translate(-9999px,-9999px); opacity: 0; width: min(360px, calc(100vw - 42px)); padding: 12px 13px; border: 1px solid #aeb9c1; border-radius: 8px; background: rgba(255,255,255,0.98); box-shadow: 0 10px 30px rgba(22,30,38,0.16); pointer-events: none; z-index: 4; line-height: 1.38; font-size: 0.92rem; }
+    .tooltip { position: fixed; transform: translate(-9999px,-9999px); opacity: 0; width: min(360px, calc(100vw - 42px)); padding: 12px 13px; border: 1px solid #aeb9c1; border-radius: 8px; background: rgba(255,255,255,0.98); box-shadow: 0 10px 30px rgba(22,30,38,0.16); pointer-events: none; z-index: 4; line-height: 1.38; font-size: 0.92rem; }
     .tooltip.visible { opacity: 1; }
     .tooltip strong { display: block; margin-bottom: 6px; font-size: 1rem; }
     .tooltip code { display: block; white-space: normal; overflow-wrap: anywhere; background: #f1f3f5; border-radius: 6px; padding: 7px 8px; margin: 7px 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.86rem; }
@@ -181,12 +182,10 @@ function tooltipHtml(d) {
 }
 function showTooltip(evt, d) { tooltip.innerHTML = tooltipHtml(d); tooltip.classList.add('visible'); moveTooltip(evt); }
 function moveTooltip(evt) {
-  const shell = document.querySelector('.chart-shell');
-  const rect = shell.getBoundingClientRect();
   const tip = tooltip.getBoundingClientRect();
-  let x = evt.clientX - rect.left + 16, y = evt.clientY - rect.top + 16;
-  if (x + tip.width > rect.width - 12) x = evt.clientX - rect.left - tip.width - 16;
-  if (y + tip.height > rect.height - 12) y = evt.clientY - rect.top - tip.height - 16;
+  let x = evt.clientX + 16, y = evt.clientY + 16;
+  if (x + tip.width > window.innerWidth - 12) x = evt.clientX - tip.width - 16;
+  if (y + tip.height > window.innerHeight - 12) y = evt.clientY - tip.height - 16;
   tooltip.style.transform = `translate(${Math.max(10,x)}px, ${Math.max(10,y)}px)`;
 }
 function hideTooltip() { tooltip.classList.remove('visible'); tooltip.style.transform = 'translate(-9999px,-9999px)'; }
@@ -204,18 +203,26 @@ function render() {
   const data = rows();
   const topIds = new Set(payload.stats[key()].top.map(d => d.ngram));
   drawAxes(b);
-  const layer = make('g');
+  const pointLayer = make('g');
+  const hitLayer = make('g');
   const q = query.toLowerCase();
   data.forEach((d, i) => {
     const isTop = topIds.has(d.ngram);
     const isMatch = q && d.ngram.toLowerCase().includes(q);
     if (q && !isMatch) return;
     const r = isTop ? 7.5 : Math.max(2.5, 3 + 8 * Math.sqrt(d.count / payload.stats[key()].max_count));
-    const c = make('circle', { cx: sx(d.x,b), cy: sy(d.y,b), r, class: `point${isTop ? ' top' : ''}${isMatch ? ' match' : ''}`, tabindex: 0, 'aria-label': `H${d.n} ${d.ngram}` }, layer);
-    c.addEventListener('mouseenter', e => { c.classList.add('active'); showTooltip(e, d); });
-    c.addEventListener('mousemove', moveTooltip);
-    c.addEventListener('mouseleave', () => { c.classList.remove('active'); hideTooltip(); });
-    c.addEventListener('focus', e => { c.classList.add('active'); showTooltip({clientX: sx(d.x,b), clientY: sy(d.y,b)}, d); });
+    const c = make('circle', { cx: sx(d.x,b), cy: sy(d.y,b), r, class: `point${isTop ? ' top' : ''}${isMatch ? ' match' : ''}`, tabindex: 0, 'aria-label': `H${d.n} ${d.ngram}` }, pointLayer);
+    const h = make('circle', { cx: sx(d.x,b), cy: sy(d.y,b), r: Math.max(10, r + 4), class: 'hit' }, hitLayer);
+    for (const el of [c, h]) {
+      el.addEventListener('pointerenter', e => { c.classList.add('active'); showTooltip(e, d); });
+      el.addEventListener('pointermove', moveTooltip);
+      el.addEventListener('pointerleave', () => { c.classList.remove('active'); hideTooltip(); });
+    }
+    c.addEventListener('focus', () => {
+      c.classList.add('active');
+      const rect = c.getBoundingClientRect();
+      showTooltip({clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2}, d);
+    });
     c.addEventListener('blur', () => { c.classList.remove('active'); hideTooltip(); });
   });
   nBadge.textContent = `H${currentN}`;

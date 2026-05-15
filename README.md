@@ -268,9 +268,10 @@ Amin-Dmin-Emin loop is more useful as harmonic vocabulary for a style.
 
 ![Distributional map of common harmonic patterns](docs/assets/harmonic_embedding_pca.png)
 
-Open the interactive version here: [H8 harmonic embedding explorer](docs/h8_harmonic_embedding_interactive.html).
-It lets the reader hover over any point to inspect the full harmonic `n`-gram,
-global support, and genre lift when the point is a signature example.
+Open the interactive version here: [harmonic style lens explorer](docs/h8_harmonic_embedding_interactive.html).
+It lets the reader move from `H3` through `H8`, switch between genre and decade
+lenses, and hover over any point to inspect the full harmonic `n`-gram, global
+support, and lift when the point is a signature example.
 
 Explore the effect of changing window length here: [harmonic n-gram embedding explorer](docs/ngram_embedding_explorer.html).
 This version lets the reader move from `H3` to `H8`, switch between song-level
