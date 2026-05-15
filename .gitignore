@@ -216,3 +216,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# macOS
+.DS_Store
+
+# Local notebook/runtime artifacts
+.matplotlib-cache/
+
+# Project data artifacts
+data/
