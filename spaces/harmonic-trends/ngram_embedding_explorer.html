@@ -42,7 +42,7 @@
     .tick { fill: #4a5055; font-size: 12px; }
     .axis-label { fill: var(--ink); font-weight: 700; font-size: 17px; }
     .point { fill: #9da9b1; opacity: 0.36; cursor: crosshair; transition: opacity 120ms ease, r 120ms ease, fill 120ms ease; }
-    .hit { fill: transparent; cursor: crosshair; }
+    
     .point.top { fill: var(--warm); opacity: 0.88; stroke: white; stroke-width: 1.4; }
     .point.match { fill: var(--accent); opacity: 0.95; stroke: white; stroke-width: 1.4; }
     .point.hidden { display: none; }
@@ -133,6 +133,8 @@ const margin = { left: 62, right: 28, top: 26, bottom: 58 };
 let currentN = 8;
 let currentContext = 'song_context';
 let query = '';
+let renderedPoints = [];
+let activeCircle = null;
 
 function fmt(n) { return Number(n).toLocaleString('en-US'); }
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -188,7 +190,39 @@ function moveTooltip(evt) {
   if (y + tip.height > window.innerHeight - 12) y = evt.clientY - tip.height - 16;
   tooltip.style.transform = `translate(${Math.max(10,x)}px, ${Math.max(10,y)}px)`;
 }
-function hideTooltip() { tooltip.classList.remove('visible'); tooltip.style.transform = 'translate(-9999px,-9999px)'; }
+function hideTooltip() {
+  tooltip.classList.remove('visible');
+  tooltip.style.transform = 'translate(-9999px,-9999px)';
+  if (activeCircle) activeCircle.classList.remove('active');
+  activeCircle = null;
+}
+function svgPointFromEvent(evt) {
+  const pt = svg.createSVGPoint();
+  pt.x = evt.clientX;
+  pt.y = evt.clientY;
+  return pt.matrixTransform(svg.getScreenCTM().inverse());
+}
+function nearestRenderedPoint(evt) {
+  if (!renderedPoints.length) return null;
+  const p = svgPointFromEvent(evt);
+  let best = null;
+  let bestDist = Infinity;
+  for (const item of renderedPoints) {
+    const dx = item.x - p.x;
+    const dy = item.y - p.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < bestDist) { best = item; bestDist = dist; }
+  }
+  return bestDist <= 18 ? best : null;
+}
+function activateNearest(evt) {
+  const item = nearestRenderedPoint(evt);
+  if (!item) { hideTooltip(); return; }
+  if (activeCircle && activeCircle !== item.circle) activeCircle.classList.remove('active');
+  activeCircle = item.circle;
+  activeCircle.classList.add('active');
+  showTooltip(evt, item.datum);
+}
 function updatePanel(data) {
   const s = payload.stats[key()];
   panelTitle.textContent = `H${currentN} ${currentContext.replace('_', '-')} summary`;
@@ -204,26 +238,28 @@ function render() {
   const topIds = new Set(payload.stats[key()].top.map(d => d.ngram));
   drawAxes(b);
   const pointLayer = make('g');
-  const hitLayer = make('g');
+  renderedPoints = [];
   const q = query.toLowerCase();
   data.forEach((d, i) => {
     const isTop = topIds.has(d.ngram);
     const isMatch = q && d.ngram.toLowerCase().includes(q);
     if (q && !isMatch) return;
-    const r = isTop ? 7.5 : Math.max(2.5, 3 + 8 * Math.sqrt(d.count / payload.stats[key()].max_count));
-    const c = make('circle', { cx: sx(d.x,b), cy: sy(d.y,b), r, class: `point${isTop ? ' top' : ''}${isMatch ? ' match' : ''}`, tabindex: 0, 'aria-label': `H${d.n} ${d.ngram}` }, pointLayer);
-    const h = make('circle', { cx: sx(d.x,b), cy: sy(d.y,b), r: Math.max(10, r + 4), class: 'hit' }, hitLayer);
-    for (const el of [c, h]) {
-      el.addEventListener('pointerenter', e => { c.classList.add('active'); showTooltip(e, d); });
-      el.addEventListener('pointermove', moveTooltip);
-      el.addEventListener('pointerleave', () => { c.classList.remove('active'); hideTooltip(); });
-    }
+    const x = sx(d.x,b), y = sy(d.y,b);
+    const r = isTop ? 7.5 : Math.max(3.5, 4 + 9 * Math.sqrt(d.count / payload.stats[key()].max_count));
+    const c = make('circle', { cx: x, cy: y, r, class: `point${isTop ? ' top' : ''}${isMatch ? ' match' : ''}`, tabindex: 0, 'aria-label': `H${d.n} ${d.ngram}` }, pointLayer);
+    renderedPoints.push({x, y, circle: c, datum: d});
+    c.addEventListener('mouseenter', e => { c.classList.add('active'); activeCircle = c; showTooltip(e, d); });
+    c.addEventListener('mousemove', moveTooltip);
+    c.addEventListener('click', e => { c.classList.add('active'); activeCircle = c; showTooltip(e, d); });
+    c.addEventListener('mouseleave', hideTooltip);
     c.addEventListener('focus', () => {
+      if (activeCircle && activeCircle !== c) activeCircle.classList.remove('active');
+      activeCircle = c;
       c.classList.add('active');
       const rect = c.getBoundingClientRect();
       showTooltip({clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2}, d);
     });
-    c.addEventListener('blur', () => { c.classList.remove('active'); hideTooltip(); });
+    c.addEventListener('blur', hideTooltip);
   });
   nBadge.textContent = `H${currentN}`;
   updatePanel(data);
@@ -236,6 +272,10 @@ contextButtons.forEach(btn => btn.addEventListener('click', () => {
   contextButtons.forEach(b => b.setAttribute('aria-pressed', String(b === btn)));
   render();
 }));
+window.activateNearestHarmonicPoint = activateNearest;
+svg.addEventListener('pointermove', activateNearest);
+svg.addEventListener('pointerleave', hideTooltip);
+svg.addEventListener('click', activateNearest);
 render();
 </script>
 </body>
