@@ -118,6 +118,178 @@
       font-size: 0.98rem;
     }
 
+    .why {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 0.82fr);
+      gap: 18px;
+      align-items: stretch;
+      margin: 0 0 22px;
+    }
+
+    .why-copy,
+    .diagram {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 2px 10px rgba(22, 30, 38, 0.04);
+    }
+
+    .why-copy {
+      padding: 18px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .why-copy h2,
+    .diagram h2,
+    .read-guide h2 {
+      margin: 0;
+      font-size: 1.35rem;
+    }
+
+    .use-list {
+      display: grid;
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .use-list li {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+
+    .use-list span {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #e8f2f1;
+      color: var(--teal);
+      font-weight: 800;
+      font-size: 0.9rem;
+    }
+
+    .diagram {
+      padding: 18px;
+      display: grid;
+      gap: 14px;
+    }
+
+    .flow {
+      display: grid;
+      gap: 10px;
+    }
+
+    .flow-step {
+      border: 1px solid #dce2e6;
+      border-radius: 8px;
+      background: #fbfcfd;
+      padding: 11px 12px;
+      display: grid;
+      gap: 4px;
+    }
+
+    .flow-step strong {
+      color: var(--dark);
+    }
+
+    .flow-step code {
+      width: fit-content;
+      border-radius: 6px;
+      background: #edf3f3;
+      padding: 3px 6px;
+      color: var(--ink);
+    }
+
+    .arrow {
+      justify-self: center;
+      color: var(--teal);
+      font-weight: 800;
+    }
+
+    .read-guide {
+      margin: 0 0 22px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      display: grid;
+      gap: 14px;
+    }
+
+    .read-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .read-card {
+      border: 1px solid #dce2e6;
+      border-radius: 8px;
+      padding: 13px;
+      background: #fbfcfd;
+      display: grid;
+      gap: 8px;
+    }
+
+    .read-card strong {
+      color: var(--dark);
+    }
+
+    .sample-map {
+      height: 76px;
+      border-radius: 8px;
+      border: 1px solid #dce2e6;
+      background:
+        radial-gradient(circle at 26% 60%, #226f72 0 5px, transparent 6px),
+        radial-gradient(circle at 42% 46%, #bd7a31 0 6px, transparent 7px),
+        radial-gradient(circle at 61% 30%, #7a8b92 0 4px, transparent 5px),
+        radial-gradient(circle at 68% 66%, #7a8b92 0 4px, transparent 5px),
+        linear-gradient(#eef3f4, #eef3f4);
+    }
+
+    .sample-bars {
+      display: grid;
+      gap: 6px;
+    }
+
+    .sample-bar {
+      height: 11px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--teal), var(--warm));
+    }
+
+    .sample-bar:nth-child(2) {
+      width: 64%;
+      opacity: 0.78;
+    }
+
+    .sample-bar:nth-child(3) {
+      width: 38%;
+      opacity: 0.56;
+    }
+
+    .sample-token {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .sample-token code {
+      border: 1px solid #dce2e6;
+      border-radius: 6px;
+      background: #fff;
+      padding: 4px 6px;
+    }
+
     .grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -244,6 +416,14 @@
     }
 
     @media (max-width: 980px) {
+      .why {
+        grid-template-columns: 1fr;
+      }
+
+      .read-grid {
+        grid-template-columns: 1fr;
+      }
+
       .grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
@@ -288,6 +468,12 @@
         gap: 10px;
       }
 
+      .why-copy,
+      .diagram,
+      .read-guide {
+        padding: 14px;
+      }
+
       .grid {
         grid-template-columns: 1fr;
         gap: 14px;
@@ -305,9 +491,9 @@
       <p class="kicker">Chord maps for musicians</p>
       <h1>Harmonic Trends</h1>
       <p class="lede">
-        Explore common chord moves in popular music. Pick a short phrase, see
-        what usually follows it, and compare how the same harmonic idea behaves
-        across genres and decades.
+        A songwriter has the same problem a language model has: given a phrase,
+        what could come next, and what kind of style does it imply? This site
+        turns thousands of chord sequences into a browsable harmonic vocabulary.
       </p>
       <div class="actions">
         <a class="button" href="harmonic_continuation_explorer.html">Find The Next Chord</a>
@@ -315,6 +501,41 @@
         <a class="button secondary" href="ngram_embedding_explorer.html">Browse Chord Shapes</a>
       </div>
     </header>
+
+    <section class="why" aria-label="Why this matters">
+      <div class="why-copy">
+        <h2>Why should a musician care?</h2>
+        <p>
+          Chord progressions are musical vocabulary. Some phrases are common
+          grammar, some point strongly toward a style, and some suggest a
+          natural next move. These tools make that vocabulary searchable.
+        </p>
+        <ul class="use-list">
+          <li><span>1</span><p><strong>Get unstuck.</strong> Start with chords you already have and see next moves that actually appear in songs.</p></li>
+          <li><span>2</span><p><strong>Study style.</strong> Compare whether a phrase feels more like pop, jazz, country, rock, or another genre.</p></li>
+          <li><span>3</span><p><strong>Build taste.</strong> Notice which loops are everywhere and which ones carry more identity.</p></li>
+        </ul>
+      </div>
+      <div class="diagram" aria-label="Chord vocabulary flow">
+        <h2>From chords to vocabulary</h2>
+        <div class="flow">
+          <div class="flow-step">
+            <strong>Song chords</strong>
+            <code>G D Emin C</code>
+          </div>
+          <div class="arrow">down</div>
+          <div class="flow-step">
+            <strong>Same shape, one starting point</strong>
+            <code>C G Amin F</code>
+          </div>
+          <div class="arrow">down</div>
+          <div class="flow-step">
+            <strong>Musical questions</strong>
+            <p>What follows? What style uses it? What phrases live nearby?</p>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <section class="guide" aria-label="How to start">
       <div class="guide-item">
@@ -328,6 +549,33 @@
       <div class="guide-item">
         <strong>3. Read it like a lead sheet</strong>
         <p>The charts show chord labels, counts, and the next chord that gets added.</p>
+      </div>
+    </section>
+
+    <section class="read-guide" aria-label="How to read the views">
+      <h2>How to read the pictures</h2>
+      <div class="read-grid">
+        <div class="read-card">
+          <strong>Bars mean next-chord likelihood</strong>
+          <div class="sample-bars" aria-hidden="true">
+            <div class="sample-bar"></div>
+            <div class="sample-bar"></div>
+            <div class="sample-bar"></div>
+          </div>
+          <p>Longer bars mean that continuation happened more often after your phrase.</p>
+        </div>
+        <div class="read-card">
+          <strong>Dots mean chord phrases</strong>
+          <div class="sample-map" aria-hidden="true"></div>
+          <p>Nearby dots are phrases that behave similarly in the song collection.</p>
+        </div>
+        <div class="read-card">
+          <strong>Chord phrases work like tokens</strong>
+          <div class="sample-token" aria-hidden="true">
+            <code>C</code><code>G</code><code>Amin</code><code>F</code>
+          </div>
+          <p>Like word vocabulary in an LLM demo, each short chord phrase can be counted, compared, and continued.</p>
+        </div>
       </div>
     </section>
 
