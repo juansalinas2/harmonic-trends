@@ -415,12 +415,46 @@
       margin-bottom: 8px;
     }
 
+    .source-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(280px, 0.8fr);
+      gap: 14px;
+      margin-top: 12px;
+    }
+
+    .source-card {
+      border: 1px solid #dbe1e5;
+      border-radius: 8px;
+      background: #fbfcfd;
+      padding: 14px;
+      color: var(--muted);
+      line-height: 1.48;
+    }
+
+    .source-card strong {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--dark);
+    }
+
+    .source-card code {
+      border-radius: 6px;
+      background: #edf3f3;
+      padding: 2px 5px;
+    }
+
+    .section a {
+      color: var(--teal);
+      font-weight: 800;
+    }
+
     @media (max-width: 980px) {
       .why {
         grid-template-columns: 1fr;
       }
 
-      .read-grid {
+      .read-grid,
+      .source-grid {
         grid-template-columns: 1fr;
       }
 
@@ -647,10 +681,26 @@
     <section class="section">
       <h2>About The Project</h2>
       <p>
-        The charts are built from a large collection of chord sequences. Similar
-        progressions are transposed into the same starting key so musicians can
-        compare harmonic shape instead of only exact song key.
+        The charts are built from the <a href="https://arxiv.org/pdf/2410.22046">Chordonomicon dataset</a>,
+        which collected chord charts from Ultimate Guitar. That source makes
+        the collection especially useful for popular, guitar-based harmony, but
+        it also means the patterns reflect the biases of web-scraped guitar
+        tabs and chord sheets.
       </p>
+      <div class="source-grid">
+        <div class="source-card">
+          <strong>What the model sees</strong>
+          These dashboards use chord sequences from that corpus and count short
+          chord phrases across songs, genres, and decades. The goal is harmonic
+          analysis, not audio transcription or a complete history of all music.
+        </div>
+        <div class="source-card">
+          <strong>Why everything starts on C</strong>
+          We compare harmonic shape, so equivalent transpositions are grouped
+          together. For example, <code>C F G</code> and <code>F Bb C</code>
+          are treated as the same I-IV-V chord shape in different keys.
+        </div>
+      </div>
     </section>
   </main>
 </body>
