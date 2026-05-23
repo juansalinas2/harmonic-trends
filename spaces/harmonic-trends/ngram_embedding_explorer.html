@@ -49,7 +49,7 @@
     .point.match { fill: var(--accent); opacity: 0.95; stroke: white; stroke-width: 1.4; }
     .point.hidden { display: none; }
     .point.active { opacity: 1; stroke: #101315; stroke-width: 2.2; }
-    .tooltip { position: fixed; transform: translate(-9999px,-9999px); opacity: 0; width: min(360px, calc(100vw - 42px)); padding: 12px 13px; border: 1px solid #aeb9c1; border-radius: 8px; background: rgba(255,255,255,0.98); box-shadow: 0 10px 30px rgba(22,30,38,0.16); pointer-events: none; z-index: 4; line-height: 1.38; font-size: 0.92rem; }
+    .tooltip { position: fixed; left: 0; top: 0; transform: translate(-9999px,-9999px); opacity: 0; width: min(360px, calc(100vw - 42px)); padding: 12px 13px; border: 1px solid #aeb9c1; border-radius: 8px; background: rgba(255,255,255,0.98); box-shadow: 0 10px 30px rgba(22,30,38,0.16); pointer-events: none; z-index: 4; line-height: 1.38; font-size: 0.92rem; }
     .tooltip.visible { opacity: 1; }
     .tooltip strong { display: block; margin-bottom: 6px; font-size: 1rem; }
     .tooltip code { display: block; white-space: normal; overflow-wrap: anywhere; background: #f1f3f5; border-radius: 6px; padding: 7px 8px; margin: 7px 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.86rem; }
@@ -66,6 +66,20 @@
     .top-list span { display: block; color: var(--muted); margin-top: 4px; font-size: 0.8rem; }
     .note { margin: 12px 4px 0; color: var(--muted); line-height: 1.5; font-size: 0.92rem; }
     @media (max-width: 920px) { .layout { grid-template-columns: 1fr; } svg { min-height: 460px; } }
+    @media (max-width: 640px) {
+      main { padding: 22px 14px 34px; }
+      h1 { font-size: clamp(2rem, 10vw, 2.55rem); }
+      .toolbar { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: stretch; }
+      .control-block, .range-wrap, input[type="search"] { width: 100%; min-width: 0; }
+      input[type="range"] { width: 100%; }
+      .segmented { width: 100%; }
+      .segmented button { flex: 1 1 0; padding: 10px 8px; }
+      .chart-shell { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      svg { width: 760px; max-width: none; min-height: 500px; }
+      .side-panel { padding: 12px; }
+      .metric-grid { grid-template-columns: 1fr; }
+      .note { margin-inline: 0; }
+    }
   </style>
 </head>
 <body>

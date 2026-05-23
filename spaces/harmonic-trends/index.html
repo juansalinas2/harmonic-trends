@@ -251,15 +251,50 @@
 
     @media (max-width: 720px) {
       main {
-        padding-inline: 16px;
+        padding: 24px 14px 34px;
+      }
+
+      header {
+        gap: 10px;
+        margin-bottom: 20px;
+      }
+
+      h1 {
+        font-size: clamp(2.4rem, 14vw, 3.25rem);
+        line-height: 1;
+      }
+
+      .lede {
+        font-size: 1rem;
+      }
+
+      .actions {
+        display: grid;
+        grid-template-columns: 1fr;
+      }
+
+      a.button {
+        width: 100%;
+        min-height: 46px;
+      }
+
+      .preview,
+      .card img {
+        aspect-ratio: 4 / 3;
       }
 
       .guide {
         grid-template-columns: 1fr;
+        gap: 10px;
       }
 
       .grid {
         grid-template-columns: 1fr;
+        gap: 14px;
+      }
+
+      .section {
+        padding: 14px;
       }
     }
   </style>

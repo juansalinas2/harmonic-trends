@@ -70,6 +70,26 @@
       .prob { text-align: left; }
       select, input { width: 100%; }
     }
+    @media (max-width: 640px) {
+      main { padding: 22px 14px 34px; }
+      header { margin-bottom: 14px; }
+      h1 { font-size: clamp(2.1rem, 11vw, 2.75rem); }
+      .quick-tip { padding: 11px 12px; }
+      .toolbar { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 16px 0; }
+      .control, .segmented, select, input { width: 100%; }
+      .segmented button { flex: 1 1 0; padding: 10px 8px; }
+      .source-panel, .viz { padding: 12px; }
+      .viz { min-height: 0; }
+      .viz-title { display: grid; gap: 4px; margin-bottom: 10px; }
+      .row { gap: 8px; padding: 10px 9px; }
+      .bar-label { font-size: 0.78rem; }
+      .prob { font-size: 1.05rem; }
+      .note { margin-inline: 0; }
+    }
+    @media (max-width: 380px) {
+      .meta-grid { grid-template-columns: 1fr; }
+      .segmented button { font-size: 0.86rem; }
+    }
   </style>
 </head>
 <body>
