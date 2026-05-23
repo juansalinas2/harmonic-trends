@@ -39,6 +39,15 @@
       margin-bottom: 28px;
     }
 
+    .kicker {
+      margin: 0;
+      color: var(--teal);
+      font-size: 0.86rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
     h1 {
       margin: 0;
       font-size: clamp(2rem, 5vw, 4.4rem);
@@ -75,10 +84,38 @@
       font-weight: 700;
     }
 
+    a.button:hover,
+    a.button:focus-visible {
+      filter: brightness(1.06);
+      outline: 3px solid rgba(34, 111, 114, 0.18);
+      outline-offset: 2px;
+    }
+
     a.button.secondary {
       background: #fff;
       color: var(--dark);
       border-color: var(--line);
+    }
+
+    .guide {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 0 0 22px;
+    }
+
+    .guide-item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 14px;
+    }
+
+    .guide-item strong {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--dark);
+      font-size: 0.98rem;
     }
 
     .grid {
@@ -213,6 +250,14 @@
     }
 
     @media (max-width: 720px) {
+      main {
+        padding-inline: 16px;
+      }
+
+      .guide {
+        grid-template-columns: 1fr;
+      }
+
       .grid {
         grid-template-columns: 1fr;
       }
@@ -222,20 +267,34 @@
 <body>
   <main>
     <header>
+      <p class="kicker">Chord maps for musicians</p>
       <h1>Harmonic Trends</h1>
       <p class="lede">
-        Musicians remember harmonic phrases, the contexts where they work, and
-        the continuations that feel natural. This Space turns chord-sequence
-        data into interactive views of that vocabulary: what is common, what is
-        genre-specific, how phrase length changes the picture, and what tends
-        to come next.
+        Explore common chord moves in popular music. Pick a short phrase, see
+        what usually follows it, and compare how the same harmonic idea behaves
+        across genres and decades.
       </p>
       <div class="actions">
-        <a class="button" href="harmonic_continuation_explorer.html">Start With Continuations</a>
-        <a class="button secondary" href="h8_harmonic_embedding_interactive.html">Open Style Lens</a>
-        <a class="button secondary" href="ngram_embedding_explorer.html">Open N-Gram Explorer</a>
+        <a class="button" href="harmonic_continuation_explorer.html">Find The Next Chord</a>
+        <a class="button secondary" href="h8_harmonic_embedding_interactive.html">Compare Styles</a>
+        <a class="button secondary" href="ngram_embedding_explorer.html">Browse Chord Shapes</a>
       </div>
     </header>
+
+    <section class="guide" aria-label="How to start">
+      <div class="guide-item">
+        <strong>1. Start with a phrase</strong>
+        <p>Try a familiar shape like <code>C G Amin</code> or <code>C F G</code>.</p>
+      </div>
+      <div class="guide-item">
+        <strong>2. Choose the musical context</strong>
+        <p>Use the whole song collection, or narrow the answer to a genre.</p>
+      </div>
+      <div class="guide-item">
+        <strong>3. Read it like a lead sheet</strong>
+        <p>The charts show chord labels, counts, and the next chord that gets added.</p>
+      </div>
+    </section>
 
     <section class="grid" aria-label="Interactive modules">
       <article class="card">
@@ -251,18 +310,17 @@
           </div>
         </div>
         <div class="card-body">
-          <h2>Continuation Explorer</h2>
+          <h2>Find The Next Chord</h2>
           <p>
-            Select a remembered harmonic phrase, condition on the global corpus
-            or a genre, and inspect the overlapping phrases that most often
-            follow. This is the clearest bridge from analysis to prediction.
+            Choose a chord phrase and see the most common next moves. This is
+            the best place to start if you want practical writing prompts.
           </p>
           <div class="tag-row">
-            <span class="tag">prediction</span>
-            <span class="tag">genre-conditioned</span>
-            <span class="tag">H3-H5</span>
+            <span class="tag">next chords</span>
+            <span class="tag">by genre</span>
+            <span class="tag">3-5 chords</span>
           </div>
-          <a class="button" href="harmonic_continuation_explorer.html">Explore Continuations</a>
+          <a class="button" href="harmonic_continuation_explorer.html">Find The Next Chord</a>
         </div>
       </article>
 
@@ -271,33 +329,32 @@
         <div class="card-body">
           <h2>Style Lens Explorer</h2>
           <p>
-            Switch between genre and decade lenses to hear which harmonic
-            phrases belong to a style, an era, or both.
+            Compare which chord phrases show up unusually often in a genre or
+            decade. Use it to spot style fingerprints.
           </p>
           <div class="tag-row">
-            <span class="tag">genre lift</span>
-            <span class="tag">decade lift</span>
-            <span class="tag">H3-H8</span>
+            <span class="tag">genres</span>
+            <span class="tag">decades</span>
+            <span class="tag">3-8 chords</span>
           </div>
-          <a class="button" href="h8_harmonic_embedding_interactive.html">Explore Style Lens</a>
+          <a class="button" href="h8_harmonic_embedding_interactive.html">Compare Styles</a>
         </div>
       </article>
 
       <article class="card">
-        <img class="genre-thumb" src="assets/genre_distinctive_ngrams.png" alt="Bar chart of distinctive harmonic n-grams by genre">
+        <img class="genre-thumb" src="assets/genre_distinctive_ngrams.png" alt="Bar chart of distinctive chord phrases by genre">
         <div class="card-body">
-          <h2>N-Gram Window Explorer</h2>
+          <h2>Chord Shape Browser</h2>
           <p>
-            Move from H3 to H8 and switch between song-level and local
-            co-occurrence contexts. The view shows how short gestures become
-            longer phrase-scale harmonic vocabulary.
+            Browse the chord-shape map from short three-chord gestures to
+            longer eight-chord loops. Search for chords you already use.
           </p>
           <div class="tag-row">
-            <span class="tag">H3-H8</span>
-            <span class="tag">PCA</span>
+            <span class="tag">3-8 chords</span>
+            <span class="tag">map view</span>
             <span class="tag">search</span>
           </div>
-          <a class="button" href="ngram_embedding_explorer.html">Explore Window Length</a>
+          <a class="button" href="ngram_embedding_explorer.html">Browse Chord Shapes</a>
         </div>
       </article>
     </section>
@@ -305,10 +362,9 @@
     <section class="section">
       <h2>About The Project</h2>
       <p>
-        These modules are static exports from the Harmonic Trends analysis
-        pipeline. The underlying project cleans raw chord data, builds exact and
-        harmonic n-gram vocabularies, stores the outputs in DuckDB, and produces
-        trend, genre, embedding, and inference-ready tables.
+        The charts are built from a large collection of chord sequences. Similar
+        progressions are transposed into the same starting key so musicians can
+        compare harmonic shape instead of only exact song key.
       </p>
     </section>
   </main>

@@ -6,22 +6,21 @@ colorTo: blue
 sdk: static
 app_file: index.html
 pinned: false
-short_description: Harmonic n-gram explorers.
+short_description: Chord-shape maps for musicians.
 ---
 
 # Harmonic Trends
 
-Interactive figures for exploring harmonic n-grams in popular music.
+Interactive chord-shape maps for exploring common progressions in popular music.
 
 This Space hosts three static explorers:
 
-- **Harmonic style lens explorer:** genre-signature and decade-signature
-  examples versus globally frequent loops from `H3` through `H8`, with hover
-  details for full n-grams and support counts.
-- **Harmonic n-gram embedding explorer:** an interactive view for changing the
-  harmonic window length from `H3` through `H8`.
-- **Harmonic continuation explorer:** a count-based view of likely next
-  harmonic phrases, optionally conditioned on genre.
+- **Find the next chord:** choose a short chord phrase and see which
+  continuations appear most often, optionally by genre.
+- **Compare styles:** find chord phrases that are unusually tied to a genre or
+  decade.
+- **Browse chord shapes:** move from three-chord gestures to eight-chord loops
+  and search for familiar chords.
 
-The figures are generated from the processed outputs of the
-`harmonic-trends` analysis pipeline.
+The underlying analysis transposes phrases to a common starting point so
+musicians can compare harmonic shape instead of exact song key.
