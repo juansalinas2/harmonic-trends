@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Find the Next Chord</title>
+  <title>Continuation Patterns</title>
   <style>
     :root {
       --ink: #202528;
@@ -26,6 +26,19 @@
     h1 { margin: 0; font-size: clamp(1.8rem, 3.4vw, 3.2rem); line-height: 1.04; letter-spacing: 0; }
     .dek { margin: 0; max-width: 940px; color: var(--muted); line-height: 1.55; font-size: 1rem; }
     .quick-tip { border: 1px solid #cfe0df; border-radius: 8px; background: #f4fbfa; padding: 12px 14px; color: #29494d; line-height: 1.45; }
+    .analysis-band { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(300px, 0.9fr); gap: 14px; margin: 0 0 18px; }
+    .analysis-copy, .phrase-path { border: 1px solid var(--line); border-radius: 8px; background: var(--panel); padding: 16px; box-shadow: 0 2px 10px rgba(22,30,38,0.05); }
+    .analysis-copy { display: grid; gap: 12px; }
+    .analysis-copy h2, .phrase-path h2 { margin: 0; font-size: 1.18rem; }
+    .signal-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .signal { border: 1px solid #dce2e6; border-radius: 8px; background: #fbfcfd; padding: 11px; display: grid; gap: 5px; color: var(--muted); line-height: 1.42; font-size: 0.92rem; }
+    .signal strong { color: var(--dark); }
+    .phrase-path { display: grid; gap: 12px; align-content: start; }
+    .path-line { display: grid; gap: 8px; }
+    .path-node { border: 1px solid #d8e1e5; border-radius: 8px; padding: 10px 11px; background: #fbfcfd; }
+    .path-node span { display: block; color: var(--muted); font-size: 0.78rem; margin-bottom: 4px; }
+    .path-node code { font-weight: 800; color: #17252a; }
+    .path-arrow { color: var(--teal); font-weight: 900; justify-self: center; }
     .toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 14px; margin: 18px 0; }
     .control { display: grid; gap: 6px; }
     .label { color: var(--muted); font-size: 0.88rem; }
@@ -65,6 +78,7 @@
     .empty { padding: 24px; color: var(--muted); text-align: center; border: 1px dashed var(--line); border-radius: 8px; }
     .note { margin: 14px 4px 0; color: var(--muted); line-height: 1.5; font-size: 0.92rem; }
     @media (max-width: 900px) {
+      .analysis-band { grid-template-columns: 1fr; }
       .layout { grid-template-columns: 1fr; }
       .row { grid-template-columns: 1fr; }
       .prob { text-align: left; }
@@ -75,6 +89,8 @@
       header { margin-bottom: 14px; }
       h1 { font-size: clamp(2.1rem, 11vw, 2.75rem); }
       .quick-tip { padding: 11px 12px; }
+      .analysis-copy, .phrase-path { padding: 12px; }
+      .signal-grid { grid-template-columns: 1fr; }
       .toolbar { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 16px 0; }
       .control, .segmented, select, input { width: 100%; }
       .segmented button { flex: 1 1 0; padding: 10px 8px; }
@@ -96,10 +112,30 @@
 <main>
   <header>
     <a class="home-link" href="index.html">Back to overview</a>
-    <h1>Find the next chord</h1>
-    <p class="dek">This is chord autocomplete. Choose a short phrase, then see what thousands of songs most often do next. Switch genres to hear how pop, rock, country, jazz, and other styles answer the same prompt differently.</p>
-    <p class="quick-tip"><strong>Start here:</strong> choose <strong>3 chords</strong>, search for something familiar like <code>C G Amin</code>, then compare <strong>global corpus</strong> with a genre. Treat the bars as “how expected is this next move?”</p>
+    <h1>Continuation patterns</h1>
+    <p class="dek">Choose a short chord phrase, then compare how the observed continuations differ across the full collection and individual genres. Read this like a musician asking, "in this style, where does this harmonic thought usually go next?"</p>
+    <p class="quick-tip"><strong>Start here:</strong> choose <strong>3 chords</strong>, search for a familiar shape like <code>C G Amin</code>, then compare <strong>global corpus</strong> with a genre. The bars show which next moves are ordinary, which are style-leaning, and how strong that tendency is.</p>
   </header>
+  <section class="analysis-band" aria-label="What this view reveals">
+    <div class="analysis-copy">
+      <h2>What a musician would notice</h2>
+      <div class="signal-grid">
+        <div class="signal"><strong>Shared grammar</strong>See next moves that remain common across the whole collection.</div>
+        <div class="signal"><strong>Genre accent</strong>Switch the corpus slice to hear which paths lean more strongly toward one style.</div>
+        <div class="signal"><strong>Phrase memory</strong>The chart keeps the ending of the selected phrase, so every row compares the same harmonic setup.</div>
+      </div>
+    </div>
+    <div class="phrase-path">
+      <h2>Read the row as a path</h2>
+      <div class="path-line" aria-hidden="true">
+        <div class="path-node"><span>selected phrase</span><code>C G Amin</code></div>
+        <div class="path-arrow">down</div>
+        <div class="path-node"><span>shared ending</span><code>G Amin</code></div>
+        <div class="path-arrow">down</div>
+        <div class="path-node"><span>observed continuation</span><code>G Amin F</code></div>
+      </div>
+    </div>
+  </section>
   <section class="toolbar" aria-label="Controls">
     <div class="control">
       <span class="label">Phrase size</span>
@@ -135,12 +171,12 @@
       <p class="story" id="storyText"></p>
       <div class="source-card">
         <span class="eyebrow">How to read the chart</span>
-        <p class="story">Each row keeps the end of your phrase and adds one new chord, the same way text autocomplete keeps your last words and predicts the next word. Longer bars mean that next move is more expected in the selected style.</p>
+        <p class="story">Each row keeps the end of the selected phrase and adds one chord. Longer bars mean that continuation makes up a larger share of the observed examples in the selected genre or corpus slice.</p>
       </div>
     </aside>
     <section class="panel viz">
       <div class="viz-title">
-        <h2 id="vizTitle">Likely continuations</h2>
+        <h2 id="vizTitle">Observed continuations</h2>
         <span id="totalText"></span>
       </div>
       <div id="continuations" class="continuations"></div>
@@ -205,8 +241,8 @@ function render() {
   sourceNgram.textContent = source ? source.ngram : 'No source selected';
   windowMetric.textContent = `${currentN} chords`;
   supportMetric.textContent = source ? fmt(source.global_count) : '-';
-  storyText.innerHTML = source ? `In <strong>${currentScope === 'global' ? 'the full song collection' : esc(currentScope)}</strong>, these are the next chord moves that most often answered the selected phrase.` : 'No phrase matches the current filters.';
-  vizTitle.textContent = source ? `Likely next moves` : 'Likely next moves';
+  storyText.innerHTML = source ? `In <strong>${currentScope === 'global' ? 'the full song collection' : esc(currentScope)}</strong>, these are the continuations most often observed after the selected phrase.` : 'No phrase matches the current filters.';
+  vizTitle.textContent = source ? `Observed continuations` : 'Observed continuations';
   totalText.textContent = rows[0] ? `${fmt(rows[0].total)} examples found` : '';
   if (!rows.length) {
     continuations.innerHTML = '<div class="empty">No continuations available for this selection.</div>';
@@ -216,7 +252,7 @@ function render() {
   continuations.innerHTML = rows.map(r => `
     <article class="row">
       <div class="target">
-        <span class="rank">#${r.rank} next move · adds <span class="added">${esc(r.added)}</span></span>
+        <span class="rank">#${r.rank} continuation · adds <span class="added">${esc(r.added)}</span></span>
         <code>${esc(r.target_ngram)}</code>
       </div>
       <div class="bar-wrap">
