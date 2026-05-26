@@ -66,7 +66,8 @@
     .viz-title span { color: var(--muted); font-size: 0.9rem; }
     .continuations { display: grid; gap: 10px; }
     .row { display: grid; grid-template-columns: minmax(180px, 1fr) minmax(220px, 1.5fr) 82px; gap: 10px; align-items: center; padding: 10px; border: 1px solid #dce2e6; border-radius: 8px; background: #fbfcfd; }
-    .row:hover { border-color: #9ab5bd; background: #f6fbfb; }
+    .row:hover, .row.active { border-color: #9ab5bd; background: #f6fbfb; }
+    .row.active { box-shadow: inset 4px 0 0 var(--teal); }
     .rank { color: var(--muted); font-size: 0.8rem; }
     .target code { display: block; margin-top: 3px; font-size: 0.9rem; }
     .added { color: var(--teal); font-weight: 800; }
@@ -122,7 +123,7 @@
       <div class="signal-grid">
         <div class="signal"><strong>Shared grammar</strong>See next moves that remain common across the whole collection.</div>
         <div class="signal"><strong>Genre accent</strong>Switch the corpus slice to hear which paths lean more strongly toward one style.</div>
-        <div class="signal"><strong>Same harmonic shape</strong>Transposed phrases are grouped together, so <code>C F G</code> and <code>F Bb C</code> count as the same I-IV-V shape.</div>
+        <div class="signal"><strong>What Hn means</strong><code>H3</code> means a three-chord phrase, <code>H4</code> means four chords, and so on.</div>
       </div>
     </div>
     <div class="phrase-path">
@@ -140,9 +141,9 @@
     <div class="control">
       <span class="label">Phrase size</span>
       <div id="nButtons" class="segmented" role="group" aria-label="Phrase size">
-        <button type="button" data-n="3" aria-pressed="true">3 chords</button>
-        <button type="button" data-n="4" aria-pressed="false">4 chords</button>
-        <button type="button" data-n="5" aria-pressed="false">5 chords</button>
+        <button type="button" data-n="3" aria-pressed="true">H3</button>
+        <button type="button" data-n="4" aria-pressed="false">H4</button>
+        <button type="button" data-n="5" aria-pressed="false">H5</button>
       </div>
     </div>
     <div class="control">
@@ -170,8 +171,16 @@
       </div>
       <p class="story" id="storyText"></p>
       <div class="source-card">
+        <span class="eyebrow">Interpretation</span>
+        <p class="story" id="insightText"></p>
+      </div>
+      <div class="source-card">
+        <span class="eyebrow">Style contrast</span>
+        <p class="story" id="contrastText"></p>
+      </div>
+      <div class="source-card">
         <span class="eyebrow">How to read the chart</span>
-        <p class="story">Each row keeps the end of the selected phrase and adds one chord. Longer bars mean that continuation makes up a larger share of the observed examples in the selected genre or corpus slice.</p>
+        <p class="story">Each row keeps the end of the selected phrase and adds one chord. Longer bars mean that continuation makes up a larger share of the observed examples in the selected genre or corpus slice. Click a row to pin it.</p>
       </div>
     </aside>
     <section class="panel viz">
@@ -195,6 +204,8 @@ const sourceNgram = document.getElementById('sourceNgram');
 const windowMetric = document.getElementById('windowMetric');
 const supportMetric = document.getElementById('supportMetric');
 const storyText = document.getElementById('storyText');
+const insightText = document.getElementById('insightText');
+const contrastText = document.getElementById('contrastText');
 const vizTitle = document.getElementById('vizTitle');
 const totalText = document.getElementById('totalText');
 const continuations = document.getElementById('continuations');
@@ -221,6 +232,19 @@ function transitionRows() {
     .filter(t => t.n === currentN && t.scope === currentScope && t.source_id === currentSource)
     .sort((a,b) => a.rank - b.rank);
 }
+function globalRowsForCurrentSource() {
+  return payload.transitions
+    .filter(t => t.n === currentN && t.scope === 'global' && t.source_id === currentSource)
+    .sort((a,b) => a.rank - b.rank);
+}
+function contrastCopy(row, globalRows) {
+  if (currentScope === 'global') return 'Pick a genre in "Compare against" to see how that style changes the next-chord probabilities from the full corpus baseline.';
+  const globalMatch = globalRows.find(g => g.target_id === row.target_id || g.target_ngram === row.target_ngram);
+  if (!globalMatch) return `Compared with the global corpus, <strong>${esc(currentScope)}</strong> keeps this continuation distinctive: <code>${esc(row.target_ngram)}</code> is not in the global top continuations for this source phrase.`;
+  const ratio = row.probability / Math.max(globalMatch.probability, 0.000001);
+  const comparison = ratio >= 1.15 ? `${ratio.toFixed(1)}x more likely` : ratio <= 0.85 ? `${(1 / Math.max(ratio, 0.000001)).toFixed(1)}x less likely` : 'about as likely';
+  return `Compared with the global corpus, <strong>${esc(currentScope)}</strong> makes <code>${esc(row.target_ngram)}</code> <strong>${comparison}</strong> (${pct(row.probability)} here vs. ${pct(globalMatch.probability)} globally).`;
+}
 function fillScopes() {
   const scopes = scopesForN();
   if (!scopes.includes(currentScope)) currentScope = scopes[0] || 'global';
@@ -239,18 +263,27 @@ function render() {
   const source = payload.sources.find(s => s.n === currentN && s.id === currentSource);
   const rows = transitionRows();
   sourceNgram.textContent = source ? source.ngram : 'No source selected';
-  windowMetric.textContent = `${currentN} chords`;
+  windowMetric.textContent = `H${currentN}`;
   supportMetric.textContent = source ? fmt(source.global_count) : '-';
   storyText.innerHTML = source ? `In <strong>${currentScope === 'global' ? 'the full song collection' : esc(currentScope)}</strong>, these are the continuations most often observed after the selected phrase.` : 'No phrase matches the current filters.';
   vizTitle.textContent = source ? `Observed continuations` : 'Observed continuations';
   totalText.textContent = rows[0] ? `${fmt(rows[0].total)} examples found` : '';
   if (!rows.length) {
     continuations.innerHTML = '<div class="empty">No continuations available for this selection.</div>';
+    insightText.textContent = 'No interpretation is available because this phrase has no continuation rows for the selected corpus slice.';
+    contrastText.textContent = 'No contrast is available for this phrase and corpus slice.';
     return;
   }
   const maxP = Math.max(...rows.map(r => r.probability));
-  continuations.innerHTML = rows.map(r => `
-    <article class="row">
+  const top = rows[0];
+  const second = rows[1];
+  const globalRows = globalRowsForCurrentSource();
+  const margin = second ? top.probability / Math.max(second.probability, 0.000001) : null;
+  const concentration = top.probability >= 0.5 ? 'very concentrated' : top.probability >= 0.25 ? 'somewhat concentrated' : 'spread across several options';
+  insightText.innerHTML = `The most common next move adds <strong>${esc(top.added)}</strong>, producing <code>${esc(top.target_ngram)}</code>. It accounts for <strong>${pct(top.probability)}</strong> of examples in this slice, so the continuation pattern is ${concentration}${margin ? `; the top option is ${margin.toFixed(1)}x the second option.` : '.'}`;
+  contrastText.innerHTML = contrastCopy(top, globalRows);
+  continuations.innerHTML = rows.map((r, i) => `
+    <article class="row${i === 0 ? ' active' : ''}" tabindex="0" data-index="${i}">
       <div class="target">
         <span class="rank">#${r.rank} continuation · adds <span class="added">${esc(r.added)}</span></span>
         <code>${esc(r.target_ngram)}</code>
@@ -262,6 +295,16 @@ function render() {
       <div class="prob">${pct(r.probability)}</div>
     </article>
   `).join('');
+  continuations.querySelectorAll('.row').forEach(row => {
+    const update = () => {
+      const r = rows[Number(row.dataset.index)];
+      continuations.querySelectorAll('.row').forEach(el => el.classList.toggle('active', el === row));
+      insightText.innerHTML = `Pinned continuation: <code>${esc(r.target_ngram)}</code>. It adds <strong>${esc(r.added)}</strong> after carrying forward <code>${esc(r.overlap)}</code>, appearing in <strong>${fmt(r.count)}</strong> of <strong>${fmt(r.total)}</strong> examples (${pct(r.probability)}).`;
+      contrastText.innerHTML = contrastCopy(r, globalRows);
+    };
+    row.addEventListener('click', update);
+    row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); update(); } });
+  });
 }
 nButtons.forEach(btn => btn.addEventListener('click', () => {
   currentN = Number(btn.dataset.n);

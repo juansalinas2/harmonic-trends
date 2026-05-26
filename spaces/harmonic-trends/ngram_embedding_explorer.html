@@ -74,8 +74,10 @@
     
     .point.top { fill: var(--warm); opacity: 0.88; stroke: white; stroke-width: 1.4; }
     .point.match { fill: var(--accent); opacity: 0.95; stroke: white; stroke-width: 1.4; }
+    .point.neighbor { opacity: 0.95; stroke: var(--accent-dark); stroke-width: 1.8; }
     .point.hidden { display: none; }
     .point.active { opacity: 1; stroke: #101315; stroke-width: 2.2; }
+    .neighbor-link { stroke: var(--accent); stroke-width: 2; stroke-linecap: round; opacity: 0.38; stroke-dasharray: 4 5; }
     .tooltip { position: fixed; left: 0; top: 0; transform: translate(-9999px,-9999px); opacity: 0; width: min(360px, calc(100vw - 42px)); padding: 12px 13px; border: 1px solid #aeb9c1; border-radius: 8px; background: rgba(255,255,255,0.98); box-shadow: 0 10px 30px rgba(22,30,38,0.16); pointer-events: none; z-index: 4; line-height: 1.38; font-size: 0.92rem; }
     .tooltip.visible { opacity: 1; }
     .tooltip strong { display: block; margin-bottom: 6px; font-size: 1rem; }
@@ -89,6 +91,10 @@
     .selected-card { border: 1px solid #dbe1e5; border-radius: 8px; background: #fbfcfd; padding: 12px; display: grid; gap: 8px; }
     .selected-card code { display: block; overflow-wrap: anywhere; border-radius: 6px; background: #eef3f4; padding: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.88rem; }
     .selected-card p { margin: 0; color: var(--muted); line-height: 1.45; font-size: 0.9rem; }
+    .neighbor-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+    .neighbor-list li { border: 1px solid #dbe1e5; border-radius: 8px; background: #fff; padding: 8px; }
+    .neighbor-list code { padding: 0; background: transparent; font-size: 0.8rem; }
+    .neighbor-list span { display: block; color: var(--muted); font-size: 0.76rem; margin-top: 3px; }
     .mini-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .mini-metric { border: 1px solid #dbe1e5; border-radius: 8px; background: #fff; padding: 8px; }
     .mini-metric span { display: block; color: var(--muted); font-size: 0.75rem; }
@@ -132,7 +138,7 @@
     <div class="analysis-copy">
       <h2>What a musician would notice</h2>
       <ul class="question-list">
-        <li><span>1</span><p>Which chord phrases are everyday harmonic vocabulary in a guitar-heavy corpus?</p></li>
+        <li><span>1</span><p>Which <code>Hn</code> phrases are everyday harmonic vocabulary in a guitar-heavy corpus?</p></li>
         <li><span>2</span><p>Which phrases feel related even when the chord labels are different?</p></li>
         <li><span>3</span><p>How does the vocabulary family change when phrases are compared by whole-song setting versus nearby chord context?</p></li>
       </ul>
@@ -154,6 +160,7 @@
         <input id="nRange" type="range" min="3" max="8" step="1" value="8" aria-label="chord phrase size">
         <span id="nBadge" class="n-badge">H8</span>
       </div>
+      <span class="label"><strong>H8</strong> means an eight-chord phrase; <strong>H3</strong> means three chords.</span>
     </div>
     <div class="control-block">
       <span class="label">Compare by</span>
@@ -194,6 +201,10 @@
           <div class="mini-metric"><span>Share</span><strong id="selectedShare">-</strong></div>
         </div>
         <p id="selectedCopy">Click a point to pin its chord phrase here. Hover still works for quick scanning, but click is better on phones.</p>
+        <div>
+          <h2>Nearest phrases</h2>
+          <ul id="neighborList" class="neighbor-list"></ul>
+        </div>
       </div>
       <div>
         <h2>Most familiar phrases</h2>
@@ -220,6 +231,7 @@ const selectedNgram = document.getElementById('selectedNgram');
 const selectedCount = document.getElementById('selectedCount');
 const selectedShare = document.getElementById('selectedShare');
 const selectedCopy = document.getElementById('selectedCopy');
+const neighborList = document.getElementById('neighborList');
 const contextButtons = Array.from(document.querySelectorAll('[data-context]'));
 const W = 980, H = 640;
 const margin = { left: 62, right: 28, top: 26, bottom: 58 };
@@ -229,6 +241,9 @@ let query = '';
 let renderedPoints = [];
 let activeCircle = null;
 let selectedDatum = null;
+let selectedNeighborIds = new Set();
+let linkLayer = null;
+let currentBounds = null;
 
 function fmt(n) { return Number(n).toLocaleString('en-US'); }
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -318,19 +333,51 @@ function activateNearest(evt) {
   activeCircle.classList.add('active');
   showTooltip(evt, item.datum);
 }
+function visibleCandidateRows() {
+  const q = query.toLowerCase();
+  return rows().filter(x => !q || x.ngram.toLowerCase().includes(q));
+}
+function nearestNeighbors(d) {
+  return visibleCandidateRows()
+    .filter(x => x.id !== d.id)
+    .map(x => ({ ...x, dist: Math.hypot(x.x - d.x, x.y - d.y) }))
+    .sort((a,b) => a.dist - b.dist)
+    .slice(0, 4);
+}
+function drawNeighborLinks(d, candidates) {
+  if (!linkLayer || !currentBounds) return;
+  while (linkLayer.firstChild) linkLayer.removeChild(linkLayer.firstChild);
+  candidates.forEach(x => {
+    make('line', {
+      x1: sx(d.x, currentBounds),
+      y1: sy(d.y, currentBounds),
+      x2: sx(x.x, currentBounds),
+      y2: sy(x.y, currentBounds),
+      class: 'neighbor-link'
+    }, linkLayer);
+  });
+  renderedPoints.forEach(item => {
+    item.circle.classList.toggle('neighbor', selectedNeighborIds.has(item.datum.id));
+    item.circle.classList.toggle('active', item.datum.id === d.id);
+  });
+}
 function selectDatum(d) {
   selectedDatum = d;
   const context = d.context === 'song_context' ? 'whole-song setting' : 'nearby-chord context';
   selectedNgram.textContent = d.ngram;
   selectedCount.textContent = fmt(d.count);
   selectedShare.textContent = `${(d.frequency * 100).toFixed(3)}%`;
-  selectedCopy.textContent = `This ${d.n}-chord equivalence class is being compared by ${context}. Use nearby points to find phrases that behave similarly in the corpus.`;
+  selectedCopy.textContent = `This H${d.n} equivalence class is being compared by ${context}. Nearby points are phrases with similar distributional behavior, not necessarily the same exact chord labels.`;
+  const candidates = nearestNeighbors(d);
+  selectedNeighborIds = new Set(candidates.map(x => x.id));
+  neighborList.innerHTML = candidates.map(x => `<li><code>${esc(x.ngram)}</code><span>${fmt(x.count)} times · map distance ${x.dist.toFixed(2)}</span></li>`).join('');
+  drawNeighborLinks(d, candidates);
 }
 function updatePanel(data) {
   const s = payload.stats[key()];
   const contextLabel = currentContext === 'song_context' ? 'whole-song' : 'nearby-chord';
-  panelTitle.textContent = `${currentN}-chord ${contextLabel} map`;
-  panelCopy.textContent = currentN <= 4 ? 'Short phrases show small moves: turnarounds, cadences, and reusable gestures.' : currentN <= 6 ? 'Mid-length phrases start to feel like musical clauses rather than isolated changes.' : 'Long phrases reveal loops and style fingerprints that can shape a full section.';
+  panelTitle.textContent = `H${currentN} ${contextLabel} map`;
+  panelCopy.textContent = currentN <= 4 ? `H${currentN} phrases show small moves: turnarounds, cadences, and reusable gestures.` : currentN <= 6 ? `H${currentN} phrases start to feel like musical clauses rather than isolated changes.` : `H${currentN} phrases reveal loops and style fingerprints that can shape a full section.`;
   pointMetric.textContent = fmt(s.points);
   medianMetric.textContent = fmt(Math.round(s.median_count));
   topList.innerHTML = s.top.map(item => `<li><code>${esc(item.ngram)}</code><span>seen ${fmt(item.count)} times · ${(item.frequency*100).toFixed(3)}%</span></li>`).join('');
@@ -338,9 +385,11 @@ function updatePanel(data) {
 function render() {
   clearSvg();
   const b = bounds();
+  currentBounds = b;
   const data = rows();
   const topIds = new Set(payload.stats[key()].top.map(d => d.ngram));
   drawAxes(b);
+  linkLayer = make('g', { class: 'neighbor-layer' });
   const pointLayer = make('g');
   renderedPoints = [];
   const q = query.toLowerCase();
@@ -350,7 +399,7 @@ function render() {
     if (q && !isMatch) return;
     const x = sx(d.x,b), y = sy(d.y,b);
     const r = isTop ? 7.5 : Math.max(3.5, 4 + 9 * Math.sqrt(d.count / payload.stats[key()].max_count));
-    const c = make('circle', { cx: x, cy: y, r, class: `point${isTop ? ' top' : ''}${isMatch ? ' match' : ''}`, tabindex: 0, 'aria-label': `H${d.n} ${d.ngram}` }, pointLayer);
+    const c = make('circle', { cx: x, cy: y, r, class: `point${isTop ? ' top' : ''}${isMatch ? ' match' : ''}${selectedNeighborIds.has(d.id) ? ' neighbor' : ''}${selectedDatum?.id === d.id ? ' active' : ''}`, tabindex: 0, 'aria-label': `H${d.n} ${d.ngram}` }, pointLayer);
     renderedPoints.push({x, y, circle: c, datum: d});
     c.addEventListener('mouseenter', e => { c.classList.add('active'); activeCircle = c; showTooltip(e, d); });
     c.addEventListener('mousemove', moveTooltip);
@@ -368,6 +417,17 @@ function render() {
   });
   nBadge.textContent = `H${currentN}`;
   updatePanel(data);
+  if (!renderedPoints.length) {
+    make('text', { x: W/2, y: H/2, 'text-anchor': 'middle', class: 'axis-label' }).textContent = 'No matching phrases';
+    selectedDatum = null;
+    selectedNeighborIds = new Set();
+    selectedNgram.textContent = 'No matching phrases';
+    selectedCount.textContent = '-';
+    selectedShare.textContent = '-';
+    selectedCopy.textContent = 'Try a broader chord search, or clear the search field to return to the full map.';
+    neighborList.innerHTML = '';
+    return;
+  }
   if (!selectedDatum || selectedDatum.n !== currentN || selectedDatum.context !== currentContext || (query && !selectedDatum.ngram.toLowerCase().includes(query.toLowerCase()))) {
     selectedDatum = renderedPoints[0]?.datum || null;
   }
