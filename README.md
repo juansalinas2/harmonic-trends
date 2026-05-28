@@ -32,7 +32,7 @@ From there, the project asks five concrete questions:
 - Which harmonic classes appear in similar song contexts?
 - Can a current harmonic state help predict a likely next state?
 
-The result is both a polished analysis project and a prototype data layer for
+The result is both an analysis project and a prototype data layer for
 future harmonic recommendation. Instead of recommending only by artist, genre,
 or audio surface, the system can compare songs by the harmonic vocabulary they
 use.
@@ -80,26 +80,6 @@ flowchart LR
     H --> J["Similarity search and recommendation"]
     K --> J
 ```
-
-## What This Demonstrates
-
-This repository is meant to show more than a set of charts. It demonstrates the
-kind of end-to-end analytical work needed when the interesting signal is buried
-inside messy, domain-specific data and has to be made measurable before it can
-be modeled.
-
-- **Data cleaning:** turning scraped chord strings and inconsistent metadata
-  into a canonical dataset.
-- **Feature engineering:** designing harmonic features that preserve musical
-  meaning while making large-scale comparison possible.
-- **Scalable analysis:** using chunked processing and DuckDB tables instead of
-  one-off notebook state.
-- **Statistical framing:** replacing vague claims about musical "complexity"
-  with measurable quantities.
-- **Communication:** converting technical outputs into readable findings,
-  charts, and product-facing use cases.
-- **Product thinking:** connecting the analysis to recommendation, retrieval,
-  and inference systems.
 
 ## Tech Stack
 
