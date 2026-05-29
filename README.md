@@ -17,12 +17,17 @@ The guiding question:
 > musical style, change over time, and recommend songs by how they move
 > harmonically?
 
+Short answer: **yes**. This project learns harmonic structure by turning chord
+sequences into transposition-invariant harmonic `n`-grams, storing their corpus
+statistics in DuckDB, and exposing song similarity through shared harmonic
+evidence rather than black-box recommendations.
+
 ## What Is Built
 
-This repository contains an end-to-end Python/Jupyter analysis pipeline that
-treats chord progressions like a musical language. Raw chord strings are cleaned
-into canonical song records, converted into exact chord `n`-grams, collapsed
-into harmonic classes, and stored in DuckDB for repeatable analysis.
+This repository contains an end-to-end Python/Jupyter analysis pipeline and a
+DuckDB-backed exploration app. Raw chord strings are cleaned into canonical song
+records, converted into exact chord `n`-grams, collapsed into harmonic classes,
+and stored in DuckDB for repeatable analysis and deployment.
 
 From there, the project asks five concrete questions:
 
@@ -64,6 +69,8 @@ foundation for recommendation, search, and style-conditioned inference.
   behavior, creating the basis for similarity search.
 - Prototyped a conditional harmonic language model for predicting continuations
   from harmonic state plus metadata.
+- Deployed an explainable DuckDB-backed explorer for harmonic song search,
+  nearest-neighbor discovery, and per-feature evidence inspection.
 
 ## Pipeline At A Glance
 
@@ -337,29 +344,71 @@ for songs with nearby harmonic profiles rather than only nearby metadata labels.
   analysis, embeddings, and modeling.
 - `notebooks/utils/`: reusable parsing, normalization, n-gram, DuckDB, and trend
   analysis helpers.
+- `app.py` and `static/`: DuckDB-backed harmonic explorer.
 - `docs/assets/`: README charts generated from processed analysis outputs.
 - `spaces/harmonic-trends/`: Hugging Face Static Space bundle for the
   interactive chart modules.
 - `scripts/deploy_hf_space.py`: deployment helper for uploading the static
   Space with `huggingface_hub`.
+- `scripts/deploy_hf_app_space.py`: deployment helper for the Docker Space app.
 - `requirements.txt`: minimal Python dependencies for running the notebooks.
 - `data/`: ignored local data directory for raw downloads, DuckDB files, and
   generated outputs.
 
-## Hugging Face Space Deployment
+## Core Deployment
 
-Live demo: [Harmonic Trends on Hugging Face Spaces](https://huggingface.co/spaces/juansalinas2/harmonic-trends).
+The main deployable system is the DuckDB-backed harmonic explorer. The database
+is the learned harmonic memory; the app is the interface for searching songs,
+retrieving neighbors, and explaining why two songs are harmonically similar.
 
-The interactive modules are packaged as a Hugging Face Static Space in
-`spaces/harmonic-trends/`. After creating a Hugging Face access token, deploy
-with:
+### Local app
+
+After notebook 12 has built the song-level similarity tables:
+
+```bash
+python3 app.py
+```
+
+Open `http://127.0.0.1:8000`.
+
+### Hugging Face Docker Space
+
+Deploy the app files:
+
+```bash
+HF_TOKEN=... python3 scripts/deploy_hf_app_space.py --repo-id USERNAME/harmonic-trends-explorer
+```
+
+Do not commit the DuckDB file. Put the production database at:
+
+```text
+/data/harmonic_trends.duckdb
+```
+
+or set:
+
+```text
+HARMONIC_DB_URL=https://...
+```
+
+Useful runtime paths:
+
+```text
+HARMONIC_DB_PATH=/data/harmonic_trends.duckdb
+SPOTIFY_CACHE_PATH=/data/spotify_metadata_cache.sqlite
+SONGS_MASTER_PARQUET_PATH=/data/songs_master.parquet
+DUCKDB_THREADS=4
+```
+
+The app exposes `/api/health` to verify that the DuckDB database is present.
+
+### Static chart Space
+
+The older standalone chart modules remain available as a Static Space:
 
 ```bash
 HF_TOKEN=... python3 scripts/deploy_hf_space.py --repo-id USERNAME/harmonic-trends
 ```
-
-The deployment script creates the Space if needed, uploads the static bundle,
-and prints the public Space URL.
 
 ## How To Reproduce The Analysis
 
@@ -416,11 +465,29 @@ remaining notebooks build and analyze the harmonic vocabulary.
     counts, support-aware backoff interpolation, holdout evaluation, and
     style-conditioned continuation examples.
 
+12. `notebooks/12_build_song_harmonic_similarity_index.ipynb`
+    Builds the song-level harmonic term table needed for recommendation:
+    support-limited `H_n(s)` counts, song document frequency, TF-IDF weights,
+    and an explainable cosine-similarity prototype with per-feature and per-`n`
+    contribution breakdowns.
+
 ## Data
 
 The `data/` directory is intentionally ignored by Git. The raw dataset,
-intermediate DuckDB database, and generated CSV/NPZ outputs are produced by the
-notebooks and can be rebuilt locally.
+intermediate DuckDB database, and generated outputs are produced by the
+notebooks and can be rebuilt locally. The production database is:
+
+```text
+data/processed/harmonic_trends.duckdb
+```
+
+Spotify title/artist search uses a local sidecar cache populated from Spotify
+track metadata as songs are opened. To preload a batch for broader name search:
+
+```bash
+python3 scripts/enrich_spotify_metadata.py --limit 500 --workers 8
+python3 scripts/enrich_spotify_metadata.py --artists --limit 500 --workers 2
+```
 
 ## Notebook Troubleshooting
 

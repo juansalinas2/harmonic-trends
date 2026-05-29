@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Harmonic Explorer</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">Harmonic similarity explorer</p>
+      <h1>Song Space</h1>
+    </div>
+    <div class="status-strip" id="statusStrip">
+      <span>Loading index</span>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <aside class="control-panel">
+      <div class="search-row">
+        <div class="section-title compact-title">
+          <label for="searchInput">Seed Song</label>
+          <button id="spotifySearchToggle" class="toggle-button active" type="button" aria-pressed="true">w/ Spotify ID</button>
+        </div>
+        <div class="search-box">
+          <input id="searchInput" type="search" placeholder="song, artist, id, genre">
+          <button id="searchButton" type="button" title="Search">⌕</button>
+        </div>
+      </div>
+
+      <div class="song-list" id="searchResults"></div>
+
+      <div class="selected-song" id="selectedSong">
+        <span class="muted">Select a song to inspect its harmonic neighborhood.</span>
+      </div>
+
+      <div class="preview-panel" id="previewPanel">
+        <span class="muted">Spotify preview or Chordonomicon chord excerpt appears here.</span>
+      </div>
+
+      <div class="scale-controls">
+        <div class="section-title">
+          <h2>Chord Pattern Lengths</h2>
+          <button id="allScalesButton" type="button">All On</button>
+        </div>
+        <div class="scale-grid" id="scaleGrid"></div>
+      </div>
+
+      <div class="mode-controls">
+        <div class="section-title">
+          <h2>Discovery Mode</h2>
+        </div>
+        <div class="preset-grid">
+          <button class="preset-button active" type="button" data-preset="balanced">Balanced</button>
+          <button class="preset-button" type="button" data-preset="rare">Rare Fingerprints</button>
+          <button class="preset-button" type="button" data-preset="long">Long Patterns</button>
+        </div>
+      </div>
+
+      <div class="query-options">
+        <label>
+          Results
+          <input id="topKInput" type="number" min="5" max="100" value="20">
+        </label>
+        <label>
+          Min shared
+          <input id="minSharedInput" type="number" min="1" max="100" value="4">
+        </label>
+      </div>
+
+      <button id="spotifyResultsToggle" class="toggle-button wide active" type="button" aria-pressed="true">Neighbors w/ Spotify ID</button>
+      <div class="filter-grid">
+        <button id="excludeArtistToggle" class="toggle-button" type="button" aria-pressed="false">Exclude Same Artist</button>
+        <button id="crossGenreToggle" class="toggle-button" type="button" aria-pressed="false">Cross-Genre Only</button>
+      </div>
+      <button id="runButton" class="primary" type="button">Find Similar Songs</button>
+    </aside>
+
+    <section class="content-panel">
+      <div class="focus-bar" id="focusBar">
+        <div class="empty-state">Search for a recognizable seed song.</div>
+      </div>
+
+      <nav class="view-tabs" aria-label="Explorer views">
+        <button id="neighborsTab" class="tab-button active" type="button" data-view="neighbors">Neighbors</button>
+        <button id="scalesTab" class="tab-button" type="button" data-view="scales">Pattern Lengths</button>
+        <button id="evidenceTab" class="tab-button" type="button" data-view="evidence">Evidence</button>
+      </nav>
+
+      <div class="view-stack">
+        <section id="neighborsView" class="view-panel active">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Nearest neighbors</p>
+              <h2>Similar Songs</h2>
+            </div>
+            <div class="metric-note">TF-IDF cosine over selected pattern lengths</div>
+          </div>
+          <div id="resultsTable" class="results-table empty-state">
+            Run a query to see ranked harmonic neighbors.
+          </div>
+        </section>
+
+        <section id="scalesView" class="view-panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Single length rankings</p>
+              <h2>By Pattern Length</h2>
+            </div>
+            <div class="metric-note">Compare chord n-gram lengths</div>
+          </div>
+          <div class="comparison-panel" id="comparisonPanel">
+            <div class="empty-state">Fixed-n ranking comparison appears after a query.</div>
+          </div>
+        </section>
+
+        <section id="evidenceView" class="view-panel">
+          <div class="panel-header">
+            <div>
+              <p class="eyebrow">Why this ranking?</p>
+              <h2>Harmonic Evidence</h2>
+            </div>
+            <div id="pairLabel" class="metric-note"></div>
+          </div>
+
+          <div class="candidate-preview" id="candidatePreview"></div>
+          <div class="evidence-summary" id="evidenceSummary"></div>
+          <div class="breakdown" id="breakdown"></div>
+          <div class="evidence-table" id="evidenceTable">
+            <div class="empty-state">Select a result to inspect shared progressions and contribution by n-gram length.</div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

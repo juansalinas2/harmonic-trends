@@ -225,3 +225,7 @@ __marimo__/
 
 # Project data artifacts
 data/
+*.duckdb
+*.duckdb.wal
+*.sqlite
+*.sqlite3
