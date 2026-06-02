@@ -22,6 +22,8 @@ sequences into transposition-invariant harmonic `n`-grams, storing their corpus
 statistics in DuckDB, and exposing song similarity through shared harmonic
 evidence rather than black-box recommendations.
 
+**Web app:** [Harmonic Trends Explorer](https://huggingface.co/spaces/juansalinas2/harmonic-trends-explorer)
+
 ## What Is Built
 
 This repository contains an end-to-end Python/Jupyter analysis pipeline and a
