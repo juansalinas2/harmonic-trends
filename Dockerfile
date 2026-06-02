@@ -7,6 +7,13 @@ ENV PORT=7860
 ENV HARMONIC_DB_PATH=/data/harmonic_trends.duckdb
 ENV SPOTIFY_CACHE_PATH=/data/spotify_metadata_cache.sqlite
 ENV SONGS_MASTER_PARQUET_PATH=/data/songs_master.parquet
+ENV HF_HOME=/data/.huggingface
+ENV HARMONIC_DB_REPO_ID=juansalinas2/harmonic-trends-data
+ENV HARMONIC_DB_FILENAME=harmonic_trends_app.duckdb
+ENV SPOTIFY_CACHE_REPO_ID=juansalinas2/harmonic-trends-data
+ENV SPOTIFY_CACHE_FILENAME=spotify_metadata_cache.sqlite
+ENV SONGS_MASTER_REPO_ID=juansalinas2/harmonic-trends-data
+ENV SONGS_MASTER_FILENAME=songs_master.parquet
 ENV DUCKDB_THREADS=4
 
 WORKDIR /app

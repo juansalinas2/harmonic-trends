@@ -7,8 +7,10 @@ import html
 import os
 import re
 import sqlite3
+import threading
 import urllib.parse
 import urllib.request
+from functools import lru_cache
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -54,8 +56,44 @@ SERVER_PORT = configured_int("PORT", 8000)
 NS = tuple(range(3, 9))
 DEFAULT_N_WEIGHTS = {n: n / min(NS) for n in NS}
 DEFAULT_WEIGHT_COLUMN = "tfidf_log_count"
+DEFAULT_CANDIDATE_MAX_DF_RATE = 0.05
+DEFAULT_CANDIDATE_FEATURES = 96
 SPOTIFY_OEMBED_CACHE: dict[str, dict] = {}
 SPOTIFY_ID_RE = re.compile(r"(?:spotify:track:|open\.spotify\.com/track/)?([A-Za-z0-9]{22})")
+_DB_LOCK = threading.RLock()
+_DB_CONNECTION: duckdb.DuckDBPyConnection | None = None
+CURATED_SPOTIFY_ARTISTS = [
+    {"spotify_artist_id": "7oPftvlwr6VrsViSDV7fJY", "name": "Green Day"},
+    {"spotify_artist_id": "6olE6TJLqED3rqDCT0FyPh", "name": "Nirvana"},
+    {"spotify_artist_id": "7guDJrEfX3qb6FEbdPA5qi", "name": "Stevie Wonder"},
+    {"spotify_artist_id": "3WrFJ7ztbogyGnTHbHJFl2", "name": "The Beatles"},
+    {"spotify_artist_id": "1dfeR4HaWDbWqFHLkxsg1d", "name": "Queen"},
+    {"spotify_artist_id": "74ASZWbe4lXaubB36ztrGX", "name": "Bob Dylan"},
+    {"spotify_artist_id": "06HL4z0CvFAxyc27GXpf02", "name": "Taylor Swift"},
+    {"spotify_artist_id": "0oSGxfWSnnOXhD2fKuz2Gy", "name": "David Bowie"},
+    {"spotify_artist_id": "4Z8W4fKeB5YxbusRsdQVPb", "name": "Radiohead"},
+    {"spotify_artist_id": "5a2EaR3hamoenG9rDuVn8j", "name": "Prince"},
+    {"spotify_artist_id": "08GQAI4eElDnROBrJRGE0X", "name": "Fleetwood Mac"},
+    {"spotify_artist_id": "3fMbdgg4jU18AjLCKBhRSm", "name": "Michael Jackson"},
+    {"spotify_artist_id": "6tbjWDEIzxoDsBA1FuhfPW", "name": "Madonna"},
+    {"spotify_artist_id": "22bE4uQ6baNwSHPVcDxLCe", "name": "The Rolling Stones"},
+    {"spotify_artist_id": "2ye2Wgw4gimLv2eAKyk1NB", "name": "Metallica"},
+]
+CURATED_SPOTIFY_ARTIST_MAP = {
+    artist["spotify_artist_id"]: {
+        **artist,
+        "spotify_url": f"https://open.spotify.com/artist/{artist['spotify_artist_id']}",
+        "description": "Curated startup artist.",
+        "thumbnail_url": None,
+    }
+    for artist in CURATED_SPOTIFY_ARTISTS
+}
+CURATED_SPOTIFY_ARTIST_ALIASES = {
+    "beatles": "3WrFJ7ztbogyGnTHbHJFl2",
+    "stones": "22bE4uQ6baNwSHPVcDxLCe",
+    "rolling stones": "22bE4uQ6baNwSHPVcDxLCe",
+    "mj": "3fMbdgg4jU18AjLCKBhRSm",
+}
 
 
 class ApiError(Exception):
@@ -65,17 +103,62 @@ class ApiError(Exception):
         self.message = message
 
 
-def connect() -> duckdb.DuckDBPyConnection:
+class DuckDBLease:
+    def __init__(self, connection: duckdb.DuckDBPyConnection):
+        self._connection = connection
+        self._closed = False
+
+    def __getattr__(self, name: str):
+        return getattr(self._connection, name)
+
+    def close(self) -> None:
+        if not self._closed:
+            self._closed = True
+            _DB_LOCK.release()
+
+    def __enter__(self) -> "DuckDBLease":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
+
+def connect() -> DuckDBLease:
     if not DB_PATH.exists():
         raise ApiError(500, f"Missing DuckDB database at {DB_PATH}")
-    con = duckdb.connect(str(DB_PATH), read_only=True)
-    con.execute(f"PRAGMA threads={DUCKDB_THREADS}")
-    return con
+    global _DB_CONNECTION
+    _DB_LOCK.acquire()
+    try:
+        if _DB_CONNECTION is None:
+            _DB_CONNECTION = duckdb.connect(str(DB_PATH), read_only=True)
+            _DB_CONNECTION.execute(f"PRAGMA threads={DUCKDB_THREADS}")
+        return DuckDBLease(_DB_CONNECTION)
+    except Exception:
+        _DB_LOCK.release()
+        raise
+
+
+def json_safe(value):
+    if isinstance(value, dict):
+        return {key: json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [json_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return [json_safe(item) for item in value]
+    if value is None:
+        return None
+    try:
+        if bool(pd.isna(value)):
+            return None
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    return value
 
 
 def rows_to_records(df: pd.DataFrame) -> list[dict]:
-    records = df.where(pd.notna(df), None).to_dict(orient="records")
-    return records
+    return json_safe(df.to_dict(orient="records"))
 
 
 def spotify_cache() -> sqlite3.Connection:
@@ -247,6 +330,42 @@ def lookup_cached_spotify_ids(query: str, limit: int) -> list[str]:
     return [row["spotify_song_id"] for row in rows]
 
 
+def lookup_curated_spotify_artist_ids(query: str, limit: int) -> list[str]:
+    normalized = " ".join(query.lower().split())
+    if not normalized:
+        return []
+
+    matches: list[tuple[int, str, str]] = []
+    alias_id = CURATED_SPOTIFY_ARTIST_ALIASES.get(normalized)
+    if alias_id:
+        matches.append((0, CURATED_SPOTIFY_ARTIST_MAP[alias_id]["name"], alias_id))
+
+    for artist in CURATED_SPOTIFY_ARTISTS:
+        artist_id = artist["spotify_artist_id"]
+        name = artist["name"]
+        name_lower = name.lower()
+        if normalized == name_lower:
+            rank = 0
+        elif name_lower.startswith(normalized):
+            rank = 1
+        elif normalized in name_lower or name_lower in normalized:
+            rank = 2
+        else:
+            continue
+        matches.append((rank, name, artist_id))
+
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for _, _, artist_id in sorted(matches):
+        if artist_id in seen:
+            continue
+        seen.add(artist_id)
+        deduped.append(artist_id)
+        if len(deduped) >= limit:
+            break
+    return deduped
+
+
 def lookup_cached_spotify_artist_ids(query: str, limit: int) -> list[str]:
     like = f"%{query.lower()}%"
     with spotify_cache() as con:
@@ -267,7 +386,13 @@ def lookup_cached_spotify_artist_ids(query: str, limit: int) -> list[str]:
             """,
             [like, like, query, f"{query}%", limit],
         ).fetchall()
-    return [row["spotify_artist_id"] for row in rows]
+    ids = [row["spotify_artist_id"] for row in rows]
+    for artist_id in lookup_curated_spotify_artist_ids(query, limit):
+        if artist_id not in ids:
+            ids.append(artist_id)
+        if len(ids) >= limit:
+            break
+    return ids
 
 
 def add_cached_spotify_fields(records: list[dict]) -> list[dict]:
@@ -320,6 +445,12 @@ def add_cached_spotify_fields(records: list[dict]) -> list[dict]:
             spotify_artist_ids,
         ).fetchall()
     artist_cache = {row["spotify_artist_id"]: dict(row) for row in rows}
+    for artist_id in spotify_artist_ids:
+        if (
+            artist_id in CURATED_SPOTIFY_ARTIST_MAP
+            and not artist_cache.get(artist_id, {}).get("name")
+        ):
+            artist_cache[artist_id] = CURATED_SPOTIFY_ARTIST_MAP[artist_id]
     for record in records:
         meta = artist_cache.get(str(record.get("spotify_artist_id")))
         if meta:
@@ -422,26 +553,51 @@ def spotify_artist_page_metadata(spotify_artist_id: str) -> dict:
     }
 
 
-def chord_excerpt(con: duckdb.DuckDBPyConnection, song_id: int) -> str | None:
+@lru_cache(maxsize=4096)
+def cached_chord_strings(song_id: int) -> tuple[str, str]:
     if not SONGS_MASTER_PATH.exists():
-        return None
+        raise ApiError(404, "Chord string data is not available in this runtime.")
+    con = duckdb.connect()
     try:
         row = con.execute(
             """
-            SELECT chords_nosections
+            SELECT chords, chords_nosections
             FROM read_parquet(?)
             WHERE id = ?
             LIMIT 1
             """,
             [str(SONGS_MASTER_PATH), song_id],
         ).fetchone()
-    except duckdb.Error:
+    except duckdb.Error as exc:
+        raise ApiError(500, f"Could not read chord string data: {exc}") from exc
+    finally:
+        con.close()
+    if not row or not (row[0] or row[1]):
+        raise ApiError(404, f"No chord string found for Song {song_id}.")
+    return str(row[0] or ""), str(row[1] or "")
+
+
+def chord_excerpt(song_id: int) -> str | None:
+    try:
+        _, no_sections = cached_chord_strings(song_id)
+    except ApiError:
         return None
-    if not row or not row[0]:
+    if not no_sections:
         return None
-    tokens = str(row[0]).split()
+    tokens = no_sections.split()
     excerpt = " ".join(tokens[:24])
     return f"{excerpt}..." if len(tokens) > 24 else excerpt
+
+
+def chord_strings(song_id: int) -> dict:
+    original, no_sections = cached_chord_strings(song_id)
+    return {
+        "song_id": song_id,
+        "chords": original,
+        "chords_nosections": no_sections,
+        "original_tokens": len(original.split()) if original else 0,
+        "chord_tokens": len(no_sections.split()) if no_sections else 0,
+    }
 
 
 def parse_int(value: str | None, default: int | None = None) -> int:
@@ -464,6 +620,24 @@ def bounded_int(
     maximum: int,
 ) -> int:
     value = parse_int(params.get(key, [str(default)])[0], default)
+    return max(minimum, min(value, maximum))
+
+
+def bounded_float(
+    params: dict[str, list[str]],
+    key: str,
+    default: float,
+    *,
+    minimum: float,
+    maximum: float,
+) -> float:
+    raw = params.get(key, [str(default)])[0]
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise ApiError(400, f"{key} must be a number") from exc
+    if not math.isfinite(value):
+        raise ApiError(400, f"{key} must be finite")
     return max(minimum, min(value, maximum))
 
 
@@ -579,6 +753,26 @@ def register_weights(con: duckdb.DuckDBPyConnection, n_weights: dict[int, float]
     con.register("selected_n_weights", alpha)
 
 
+def has_table(con: duckdb.DuckDBPyConnection, table_name: str) -> bool:
+    return bool(
+        con.execute(
+            """
+            SELECT COUNT(*) > 0
+            FROM information_schema.tables
+            WHERE table_schema = 'main' AND table_name = ?
+            """,
+            [table_name],
+        ).fetchone()[0]
+    )
+
+
+def uses_default_multin_weights(selected_ns: tuple[int, ...], weights: dict[int, float]) -> bool:
+    return selected_ns == NS and all(
+        math.isclose(float(weights.get(n, float("nan"))), float(DEFAULT_N_WEIGHTS[n]))
+        for n in NS
+    )
+
+
 def api_stats() -> dict:
     con = connect()
     try:
@@ -644,6 +838,11 @@ def api_search(params: dict[str, list[str]]) -> dict:
         cached_spotify_ids.insert(0, parsed_spotify_id)
     con = connect()
     try:
+        search_table = (
+            "song_search_summary"
+            if has_table(con, "song_search_summary")
+            else None
+        )
         if q:
             like = f"%{q.lower()}%"
             exact_id = int(q) if q.isdigit() else -1
@@ -669,46 +868,85 @@ def api_search(params: dict[str, list[str]]) -> dict:
                 "spotify_artist_search_ids",
                 pd.DataFrame({"spotify_artist_id": spotify_artist_filter}),
             )
-            df = con.execute(
-                f"""
-                SELECT
-                    m.id AS song_id,
-                    m.release_year,
-                    m.decade,
-                    m.main_genre,
-                    m.artist_id,
-                    m.spotify_artist_id,
-                    m.spotify_song_id,
-                    SUM(t.indexed_windows) AS indexed_windows,
-                    SUM(t.unique_indexed_harmonic_classes) AS indexed_features
-                FROM song_metadata m
-                JOIN song_harmonic_totals t ON t.song_id = m.id
-                WHERE (
-                       m.id = ?
-                   OR LOWER(COALESCE(m.spotify_song_id, '')) LIKE ?
-                   OR LOWER(COALESCE(m.spotify_artist_id, '')) LIKE ?
-                   OR LOWER(COALESCE(m.artist_id, '')) LIKE ?
-                   OR LOWER(COALESCE(m.main_genre, '')) LIKE ?
-                   OR m.spotify_song_id IN (SELECT * FROM spotify_search_ids)
-                   OR m.spotify_artist_id IN (SELECT * FROM spotify_artist_search_ids)
-                )
-                {spotify_required}
-                GROUP BY m.id, m.release_year, m.decade, m.main_genre,
-                         m.artist_id, m.spotify_artist_id, m.spotify_song_id
-                HAVING SUM(t.unique_indexed_harmonic_classes) > 0
-                ORDER BY
-                    CASE WHEN m.id = ? THEN 0 ELSE 1 END,
-                    CASE WHEN m.spotify_artist_id IN (SELECT * FROM spotify_artist_search_ids) THEN 0 ELSE 1 END,
-                    CASE WHEN m.spotify_song_id IN (SELECT * FROM spotify_search_ids) THEN 0 ELSE 1 END,
-                    {spotify_order}
-                    indexed_features DESC,
-                    song_id
-                LIMIT ?
-                """,
-                [exact_id, like, like, like, like, exact_id, sql_limit],
-            ).fetchdf()
-            con.unregister("spotify_search_ids")
-            con.unregister("spotify_artist_search_ids")
+            try:
+                if search_table:
+                    df = con.execute(
+                        f"""
+                        SELECT
+                            s.song_id,
+                            s.release_year,
+                            s.decade,
+                            s.main_genre,
+                            s.artist_id,
+                            s.spotify_artist_id,
+                            s.spotify_song_id,
+                            s.indexed_windows,
+                            s.indexed_features
+                        FROM {search_table} s
+                        WHERE (
+                               s.song_id = ?
+                           OR LOWER(COALESCE(s.spotify_song_id, '')) LIKE ?
+                           OR LOWER(COALESCE(s.spotify_artist_id, '')) LIKE ?
+                           OR LOWER(COALESCE(s.artist_id, '')) LIKE ?
+                           OR LOWER(COALESCE(s.main_genre, '')) LIKE ?
+                           OR s.spotify_song_id IN (SELECT * FROM spotify_search_ids)
+                           OR s.spotify_artist_id IN (SELECT * FROM spotify_artist_search_ids)
+                        )
+                        {spotify_required.replace("m.", "s.")}
+                          AND s.indexed_features > 0
+                        ORDER BY
+                            CASE WHEN s.song_id = ? THEN 0 ELSE 1 END,
+                            CASE WHEN s.spotify_artist_id IN (SELECT * FROM spotify_artist_search_ids) THEN 0 ELSE 1 END,
+                            CASE WHEN s.spotify_song_id IN (SELECT * FROM spotify_search_ids) THEN 0 ELSE 1 END,
+                            {spotify_order.replace("m.", "s.")}
+                            indexed_features DESC,
+                            song_id
+                        LIMIT ?
+                        """,
+                        [exact_id, like, like, like, like, exact_id, sql_limit],
+                    ).fetchdf()
+                else:
+                    df = con.execute(
+                        f"""
+                        SELECT
+                            m.id AS song_id,
+                            m.release_year,
+                            m.decade,
+                            m.main_genre,
+                            m.artist_id,
+                            m.spotify_artist_id,
+                            m.spotify_song_id,
+                            SUM(t.indexed_windows) AS indexed_windows,
+                            SUM(t.unique_indexed_harmonic_classes) AS indexed_features
+                        FROM song_metadata m
+                        JOIN song_harmonic_totals t ON t.song_id = m.id
+                        WHERE (
+                               m.id = ?
+                           OR LOWER(COALESCE(m.spotify_song_id, '')) LIKE ?
+                           OR LOWER(COALESCE(m.spotify_artist_id, '')) LIKE ?
+                           OR LOWER(COALESCE(m.artist_id, '')) LIKE ?
+                           OR LOWER(COALESCE(m.main_genre, '')) LIKE ?
+                           OR m.spotify_song_id IN (SELECT * FROM spotify_search_ids)
+                           OR m.spotify_artist_id IN (SELECT * FROM spotify_artist_search_ids)
+                        )
+                        {spotify_required}
+                        GROUP BY m.id, m.release_year, m.decade, m.main_genre,
+                                 m.artist_id, m.spotify_artist_id, m.spotify_song_id
+                        HAVING SUM(t.unique_indexed_harmonic_classes) > 0
+                        ORDER BY
+                            CASE WHEN m.id = ? THEN 0 ELSE 1 END,
+                            CASE WHEN m.spotify_artist_id IN (SELECT * FROM spotify_artist_search_ids) THEN 0 ELSE 1 END,
+                            CASE WHEN m.spotify_song_id IN (SELECT * FROM spotify_search_ids) THEN 0 ELSE 1 END,
+                            {spotify_order}
+                            indexed_features DESC,
+                            song_id
+                        LIMIT ?
+                        """,
+                        [exact_id, like, like, like, like, exact_id, sql_limit],
+                    ).fetchdf()
+            finally:
+                con.unregister("spotify_search_ids")
+                con.unregister("spotify_artist_search_ids")
         else:
             spotify_required = (
                 "WHERE m.spotify_song_id IS NOT NULL AND m.spotify_song_id <> ''"
@@ -720,29 +958,50 @@ def api_search(params: dict[str, list[str]]) -> dict:
                 if spotify_mode == "prefer"
                 else ""
             )
-            df = con.execute(
-                f"""
-                SELECT
-                    m.id AS song_id,
-                    m.release_year,
-                    m.decade,
-                    m.main_genre,
-                    m.artist_id,
-                    m.spotify_artist_id,
-                    m.spotify_song_id,
-                    SUM(t.indexed_windows) AS indexed_windows,
-                    SUM(t.unique_indexed_harmonic_classes) AS indexed_features
-                FROM song_metadata m
-                JOIN song_harmonic_totals t ON t.song_id = m.id
-                {spotify_required}
-                GROUP BY m.id, m.release_year, m.decade, m.main_genre,
-                         m.artist_id, m.spotify_artist_id, m.spotify_song_id
-                HAVING SUM(t.unique_indexed_harmonic_classes) > 0
-                ORDER BY {spotify_order} indexed_features DESC, song_id
-                LIMIT ?
-                """,
-                [sql_limit],
-            ).fetchdf()
+            if search_table:
+                df = con.execute(
+                    f"""
+                    SELECT
+                        s.song_id,
+                        s.release_year,
+                        s.decade,
+                        s.main_genre,
+                        s.artist_id,
+                        s.spotify_artist_id,
+                        s.spotify_song_id,
+                        s.indexed_windows,
+                        s.indexed_features
+                    FROM {search_table} s
+                    {"WHERE s.spotify_song_id IS NOT NULL AND s.spotify_song_id <> '' AND s.indexed_features > 0" if spotify_mode == "only" else "WHERE s.indexed_features > 0"}
+                    ORDER BY {spotify_order.replace("m.", "s.")} indexed_features DESC, song_id
+                    LIMIT ?
+                    """,
+                    [sql_limit],
+                ).fetchdf()
+            else:
+                df = con.execute(
+                    f"""
+                    SELECT
+                        m.id AS song_id,
+                        m.release_year,
+                        m.decade,
+                        m.main_genre,
+                        m.artist_id,
+                        m.spotify_artist_id,
+                        m.spotify_song_id,
+                        SUM(t.indexed_windows) AS indexed_windows,
+                        SUM(t.unique_indexed_harmonic_classes) AS indexed_features
+                    FROM song_metadata m
+                    JOIN song_harmonic_totals t ON t.song_id = m.id
+                    {spotify_required}
+                    GROUP BY m.id, m.release_year, m.decade, m.main_genre,
+                             m.artist_id, m.spotify_artist_id, m.spotify_song_id
+                    HAVING SUM(t.unique_indexed_harmonic_classes) > 0
+                    ORDER BY {spotify_order} indexed_features DESC, song_id
+                    LIMIT ?
+                    """,
+                    [sql_limit],
+                ).fetchdf()
     finally:
         con.close()
     records = dedupe_spotify_records(
@@ -794,15 +1053,19 @@ def api_song(song_id: int) -> dict:
             """,
             [song_id],
         ).fetchdf()
-        excerpt = chord_excerpt(con, song_id)
     finally:
         con.close()
     song_record = rows_to_records(song)[0]
     song_record["spotify_url"] = spotify_url(song_record.get("spotify_song_id"))
     song_record["spotify_embed_url"] = spotify_embed_url(song_record.get("spotify_song_id"))
+    excerpt = None if song_record.get("spotify_song_id") else chord_excerpt(song_id)
     song_record["chord_excerpt"] = excerpt
     add_cached_spotify_fields([song_record])
     return {"song": song_record, "totals": rows_to_records(totals)}
+
+
+def api_chords(song_id: int) -> dict:
+    return chord_strings(song_id)
 
 
 def api_spotify(params: dict[str, list[str]]) -> dict:
@@ -868,6 +1131,28 @@ def api_similar(params: dict[str, list[str]]) -> dict:
     top_k = bounded_int(params, "top_k", 20, minimum=1, maximum=100)
     sql_limit = min(top_k * 6, 600)
     min_shared = bounded_int(params, "min_shared", 4, minimum=1, maximum=500)
+    candidate_features = bounded_int(
+        params,
+        "candidate_features",
+        DEFAULT_CANDIDATE_FEATURES,
+        minimum=16,
+        maximum=500,
+    )
+    candidate_pool = bounded_int(
+        params,
+        "candidate_pool",
+        max(sql_limit * 12, 1200),
+        minimum=sql_limit,
+        maximum=10000,
+    )
+    max_df_rate = bounded_float(
+        params,
+        "max_df_rate",
+        DEFAULT_CANDIDATE_MAX_DF_RATE,
+        minimum=0.0,
+        maximum=1.0,
+    )
+    exact_scan = parse_bool(params, "exact")
     spotify_mode = parse_spotify_mode(params)
     exclude_same_artist = parse_bool(params, "exclude_same_artist")
     cross_genre = parse_bool(params, "cross_genre")
@@ -883,67 +1168,187 @@ def api_similar(params: dict[str, list[str]]) -> dict:
         if spotify_mode == "prefer"
         else ""
     )
+    scored_spotify_order = (
+        "CASE WHEN spotify_song_id IS NOT NULL AND spotify_song_id <> '' THEN 0 ELSE 1 END,"
+        if spotify_mode == "prefer"
+        else ""
+    )
 
     con = connect()
     register_weights(con, weights)
     try:
-        df = con.execute(
-            f"""
-            WITH q AS (
-                SELECT
-                    w.song_id,
-                    w.n,
-                    w.harmonic_id,
-                    w.{weight_column} * a.alpha AS weight
-                FROM song_harmonic_tfidf w
-                JOIN selected_n_weights a USING (n)
-                WHERE w.song_id = ?
-            ), candidate_dots AS (
-                SELECT
-                    c.song_id AS candidate_song_id,
-                    SUM(q.weight * c.{weight_column} * a.alpha) AS dot_product,
-                    COUNT(*) AS shared_features
-                FROM q
-                JOIN song_harmonic_tfidf c USING (n, harmonic_id)
-                JOIN selected_n_weights a ON a.n = c.n
-                WHERE c.song_id <> ?
-                GROUP BY c.song_id
-                HAVING COUNT(*) >= ?
-            ), norms AS (
+        use_default_norms = (
+            uses_default_multin_weights(selected_ns, weights)
+            and has_table(con, "song_harmonic_norm_default")
+        )
+        if use_default_norms:
+            default_norm_col = (
+                "norm_tfidf_log_count"
+                if weight_column == "tfidf_log_count"
+                else "norm_tfidf_frequency"
+            )
+            norms_cte = f"""
+            norms AS (
+                SELECT song_id, {default_norm_col} AS norm
+                FROM song_harmonic_norm_default
+            )
+            """
+        else:
+            norms_cte = f"""
+            norms AS (
                 SELECT
                     nc.song_id,
                     SQRT(SUM(nc.{norm_col} * a.alpha * a.alpha)) AS norm
                 FROM song_harmonic_norm_components nc
                 JOIN selected_n_weights a USING (n)
                 GROUP BY nc.song_id
-            ), q_norm AS (
-                SELECT norm FROM norms WHERE song_id = ?
-            ), q_meta AS (
-                SELECT artist_id, spotify_artist_id, main_genre
-                FROM song_metadata
-                WHERE id = ?
             )
-            SELECT
-                d.candidate_song_id,
-                d.dot_product / NULLIF(q_norm.norm * norms.norm, 0) AS similarity_score,
-                d.shared_features,
-                m.release_year,
-                m.decade,
-                m.main_genre,
-                m.artist_id,
-                m.spotify_artist_id,
-                m.spotify_song_id
-            FROM candidate_dots d
-            JOIN norms ON norms.song_id = d.candidate_song_id
-            CROSS JOIN q_norm
-            CROSS JOIN q_meta qm
-            LEFT JOIN song_metadata m ON m.id = d.candidate_song_id
-            {candidate_where}
-            ORDER BY {spotify_order} similarity_score DESC, shared_features DESC, candidate_song_id
-            LIMIT ?
-            """,
-            [song_id, song_id, min_shared, song_id, song_id, sql_limit],
-        ).fetchdf()
+            """
+        if exact_scan:
+            df = con.execute(
+                f"""
+                WITH q AS (
+                    SELECT
+                        w.song_id,
+                        w.n,
+                        w.harmonic_id,
+                        w.{weight_column} * a.alpha AS weight
+                    FROM song_harmonic_tfidf w
+                    JOIN selected_n_weights a USING (n)
+                    WHERE w.song_id = ?
+                ), candidate_dots AS (
+                    SELECT
+                        c.song_id AS candidate_song_id,
+                        SUM(q.weight * c.{weight_column} * a.alpha) AS dot_product,
+                        COUNT(*) AS shared_features
+                    FROM q
+                    JOIN song_harmonic_tfidf c USING (n, harmonic_id)
+                    JOIN selected_n_weights a ON a.n = c.n
+                    WHERE c.song_id <> ?
+                    GROUP BY c.song_id
+                    HAVING COUNT(*) >= ?
+                ), {norms_cte}, q_norm AS (
+                    SELECT norm FROM norms WHERE song_id = ?
+                ), q_meta AS (
+                    SELECT artist_id, spotify_artist_id, main_genre
+                    FROM song_metadata
+                    WHERE id = ?
+                )
+                SELECT
+                    d.candidate_song_id,
+                    d.dot_product / NULLIF(q_norm.norm * norms.norm, 0) AS similarity_score,
+                    d.shared_features,
+                    m.release_year,
+                    m.decade,
+                    m.main_genre,
+                    m.artist_id,
+                    m.spotify_artist_id,
+                    m.spotify_song_id
+                FROM candidate_dots d
+                JOIN norms ON norms.song_id = d.candidate_song_id
+                CROSS JOIN q_norm
+                CROSS JOIN q_meta qm
+                LEFT JOIN song_metadata m ON m.id = d.candidate_song_id
+                {candidate_where}
+                ORDER BY {spotify_order} similarity_score DESC, shared_features DESC, candidate_song_id
+                LIMIT ?
+                """,
+                [
+                    song_id,
+                    song_id,
+                    min_shared,
+                    song_id,
+                    song_id,
+                    sql_limit,
+                ],
+            ).fetchdf()
+        else:
+            df = con.execute(
+                f"""
+                WITH q AS (
+                    SELECT
+                        w.song_id,
+                        w.n,
+                        w.harmonic_id,
+                        w.{weight_column} * a.alpha AS weight,
+                        df.idf,
+                        df.song_df_rate
+                    FROM song_harmonic_tfidf w
+                    JOIN selected_n_weights a USING (n)
+                    JOIN harmonic_song_document_frequency df USING (n, harmonic_id)
+                    WHERE w.song_id = ?
+                ), q_candidate_features AS (
+                    SELECT *
+                    FROM q
+                    WHERE song_df_rate <= ?
+                    QUALIFY ROW_NUMBER() OVER (
+                        ORDER BY weight DESC, idf DESC, n DESC, harmonic_id
+                    ) <= ?
+                ), candidate_pool AS (
+                    SELECT
+                        c.song_id AS candidate_song_id,
+                        SUM(q.weight * c.{weight_column} * a.alpha) AS approximate_dot,
+                        COUNT(*) AS candidate_shared_features
+                    FROM q_candidate_features q
+                    JOIN song_harmonic_tfidf c USING (n, harmonic_id)
+                    JOIN selected_n_weights a ON a.n = c.n
+                    WHERE c.song_id <> ?
+                    GROUP BY c.song_id
+                    HAVING COUNT(*) >= ?
+                    ORDER BY approximate_dot DESC, candidate_shared_features DESC, candidate_song_id
+                    LIMIT ?
+                ), candidate_dots AS (
+                    SELECT
+                        c.song_id AS candidate_song_id,
+                        SUM(q.weight * c.{weight_column} * a.alpha) AS dot_product,
+                        COUNT(*) AS shared_features
+                    FROM q
+                    JOIN song_harmonic_tfidf c USING (n, harmonic_id)
+                    JOIN candidate_pool p ON p.candidate_song_id = c.song_id
+                    JOIN selected_n_weights a ON a.n = c.n
+                    WHERE c.song_id <> ?
+                    GROUP BY c.song_id
+                    HAVING COUNT(*) >= ?
+                ), {norms_cte}, q_norm AS (
+                    SELECT norm FROM norms WHERE song_id = ?
+                ), q_meta AS (
+                    SELECT artist_id, spotify_artist_id, main_genre
+                    FROM song_metadata
+                    WHERE id = ?
+                )
+                SELECT
+                    d.candidate_song_id,
+                    d.dot_product / NULLIF(q_norm.norm * norms.norm, 0) AS similarity_score,
+                    d.shared_features,
+                    m.release_year,
+                    m.decade,
+                    m.main_genre,
+                    m.artist_id,
+                    m.spotify_artist_id,
+                    m.spotify_song_id
+                FROM candidate_dots d
+                JOIN norms ON norms.song_id = d.candidate_song_id
+                CROSS JOIN q_norm
+                CROSS JOIN q_meta qm
+                LEFT JOIN song_metadata m ON m.id = d.candidate_song_id
+                {candidate_where}
+                ORDER BY {spotify_order} similarity_score DESC, shared_features DESC, candidate_song_id
+                LIMIT ?
+                """,
+                [
+                    song_id,
+                    max_df_rate,
+                    candidate_features,
+                    song_id,
+                    min_shared,
+                    candidate_pool,
+                    song_id,
+                    min_shared,
+                    song_id,
+                    song_id,
+                    sql_limit,
+                ],
+            ).fetchdf()
     finally:
         con.unregister("selected_n_weights")
         con.close()
@@ -956,6 +1361,12 @@ def api_similar(params: dict[str, list[str]]) -> dict:
         "song_id": song_id,
         "ns": selected_ns,
         "weights": weights,
+        "strategy": {
+            "exact_scan": exact_scan,
+            "candidate_features": None if exact_scan else candidate_features,
+            "candidate_pool": None if exact_scan else candidate_pool,
+            "max_df_rate": None if exact_scan else max_df_rate,
+        },
         "results": records,
     }
 
@@ -1031,6 +1442,28 @@ def api_compare_n(params: dict[str, list[str]]) -> dict:
     top_k = bounded_int(params, "top_k", 5, minimum=1, maximum=20)
     sql_limit = min(top_k * 6, 120)
     min_shared = bounded_int(params, "min_shared", 2, minimum=1, maximum=500)
+    candidate_features = bounded_int(
+        params,
+        "candidate_features",
+        96,
+        minimum=8,
+        maximum=500,
+    )
+    candidate_pool = bounded_int(
+        params,
+        "candidate_pool",
+        max(sql_limit * 4, 120),
+        minimum=sql_limit,
+        maximum=2000,
+    )
+    max_df_rate = bounded_float(
+        params,
+        "max_df_rate",
+        DEFAULT_CANDIDATE_MAX_DF_RATE,
+        minimum=0.0,
+        maximum=1.0,
+    )
+    exact_scan = parse_bool(params, "exact")
     spotify_mode = parse_spotify_mode(params)
     exclude_same_artist = parse_bool(params, "exclude_same_artist")
     cross_genre = parse_bool(params, "cross_genre")
@@ -1044,64 +1477,183 @@ def api_compare_n(params: dict[str, list[str]]) -> dict:
         if spotify_mode == "prefer"
         else ""
     )
+    scored_spotify_order = (
+        "CASE WHEN spotify_song_id IS NOT NULL AND spotify_song_id <> '' THEN 0 ELSE 1 END,"
+        if spotify_mode == "prefer"
+        else ""
+    )
 
     con = connect()
     try:
-        df = con.execute(
-            f"""
-            WITH q AS (
-                SELECT song_id, n, harmonic_id, tfidf_log_count AS weight
-                FROM song_harmonic_tfidf
-                WHERE song_id = ?
-            ), q_meta AS (
-                SELECT artist_id, spotify_artist_id, main_genre
-                FROM song_metadata
-                WHERE id = ?
-            ), candidate_dots AS (
-                SELECT
-                    q.n,
-                    c.song_id AS candidate_song_id,
-                    SUM(q.weight * c.tfidf_log_count) AS dot_product,
-                    COUNT(*) AS shared_features
-                FROM q
-                JOIN song_harmonic_tfidf c USING (n, harmonic_id)
-                WHERE c.song_id <> ?
-                GROUP BY q.n, c.song_id
-                HAVING COUNT(*) >= ?
-            ), scored AS (
-                SELECT
-                    d.n,
-                    d.candidate_song_id,
-                    d.dot_product / NULLIF(
-                        SQRT(qn.norm_sq_tfidf_log_count) * SQRT(cn.norm_sq_tfidf_log_count),
-                        0
-                    ) AS similarity_score,
-                    d.shared_features,
-                    m.release_year,
-                    m.decade,
-                    m.main_genre,
-                    m.artist_id,
-                    m.spotify_artist_id,
-                    m.spotify_song_id
-                FROM candidate_dots d
-                JOIN song_harmonic_norm_components qn
-                    ON qn.song_id = ? AND qn.n = d.n
-                JOIN song_harmonic_norm_components cn
-                    ON cn.song_id = d.candidate_song_id AND cn.n = d.n
-                CROSS JOIN q_meta qm
-                LEFT JOIN song_metadata m ON m.id = d.candidate_song_id
-                {candidate_where}
-            )
-            SELECT *
-            FROM scored
-            QUALIFY ROW_NUMBER() OVER (
-                PARTITION BY n
-                ORDER BY {spotify_order} similarity_score DESC, shared_features DESC, candidate_song_id
-            ) <= ?
-            ORDER BY n, {spotify_order} similarity_score DESC
-            """,
-            [song_id, song_id, song_id, min_shared, song_id, sql_limit],
-        ).fetchdf()
+        if exact_scan:
+            df = con.execute(
+                f"""
+                WITH q AS (
+                    SELECT
+                        w.song_id,
+                        w.n,
+                        w.harmonic_id,
+                        w.tfidf_log_count AS weight
+                    FROM song_harmonic_tfidf w
+                    WHERE w.song_id = ?
+                ), q_meta AS (
+                    SELECT artist_id, spotify_artist_id, main_genre
+                    FROM song_metadata
+                    WHERE id = ?
+                ), candidate_dots AS (
+                    SELECT
+                        q.n,
+                        c.song_id AS candidate_song_id,
+                        SUM(q.weight * c.tfidf_log_count) AS dot_product,
+                        COUNT(*) AS shared_features
+                    FROM q
+                    JOIN song_harmonic_tfidf c USING (n, harmonic_id)
+                    WHERE c.song_id <> ?
+                    GROUP BY q.n, c.song_id
+                    HAVING COUNT(*) >= ?
+                ), scored AS (
+                    SELECT
+                        d.n,
+                        d.candidate_song_id,
+                        d.dot_product / NULLIF(
+                            SQRT(qn.norm_sq_tfidf_log_count) * SQRT(cn.norm_sq_tfidf_log_count),
+                            0
+                        ) AS similarity_score,
+                        d.shared_features,
+                        m.release_year,
+                        m.decade,
+                        m.main_genre,
+                        m.artist_id,
+                        m.spotify_artist_id,
+                        m.spotify_song_id
+                    FROM candidate_dots d
+                    JOIN song_harmonic_norm_components qn
+                        ON qn.song_id = ? AND qn.n = d.n
+                    JOIN song_harmonic_norm_components cn
+                        ON cn.song_id = d.candidate_song_id AND cn.n = d.n
+                    CROSS JOIN q_meta qm
+                    LEFT JOIN song_metadata m ON m.id = d.candidate_song_id
+                    {candidate_where}
+                )
+                SELECT *
+                FROM scored
+                QUALIFY ROW_NUMBER() OVER (
+                    PARTITION BY n
+                    ORDER BY {scored_spotify_order} similarity_score DESC, shared_features DESC, candidate_song_id
+                ) <= ?
+                ORDER BY n, {scored_spotify_order} similarity_score DESC
+                """,
+                [
+                    song_id,
+                    song_id,
+                    song_id,
+                    min_shared,
+                    song_id,
+                    sql_limit,
+                ],
+            ).fetchdf()
+        else:
+            df = con.execute(
+                f"""
+                WITH q AS (
+                    SELECT
+                        w.song_id,
+                        w.n,
+                        w.harmonic_id,
+                        w.tfidf_log_count AS weight,
+                        df.idf,
+                        df.song_df_rate
+                    FROM song_harmonic_tfidf w
+                    JOIN harmonic_song_document_frequency df USING (n, harmonic_id)
+                    WHERE w.song_id = ?
+                ), q_meta AS (
+                    SELECT artist_id, spotify_artist_id, main_genre
+                    FROM song_metadata
+                    WHERE id = ?
+                ), q_candidate_features AS (
+                    SELECT *
+                    FROM q
+                    WHERE song_df_rate <= ?
+                    QUALIFY ROW_NUMBER() OVER (
+                        PARTITION BY n
+                        ORDER BY weight DESC, idf DESC, harmonic_id
+                    ) <= ?
+                ), candidate_pool_raw AS (
+                    SELECT
+                        q.n,
+                        c.song_id AS candidate_song_id,
+                        SUM(q.weight * c.tfidf_log_count) AS approximate_dot,
+                        COUNT(*) AS candidate_shared_features
+                    FROM q_candidate_features q
+                    JOIN song_harmonic_tfidf c USING (n, harmonic_id)
+                    WHERE c.song_id <> ?
+                    GROUP BY q.n, c.song_id
+                    HAVING COUNT(*) >= ?
+                ), candidate_pool AS (
+                    SELECT *
+                    FROM candidate_pool_raw
+                    QUALIFY ROW_NUMBER() OVER (
+                        PARTITION BY n
+                        ORDER BY approximate_dot DESC, candidate_shared_features DESC, candidate_song_id
+                    ) <= ?
+                ), candidate_dots AS (
+                    SELECT
+                        q.n,
+                        c.song_id AS candidate_song_id,
+                        SUM(q.weight * c.tfidf_log_count) AS dot_product,
+                        COUNT(*) AS shared_features
+                    FROM q
+                    JOIN song_harmonic_tfidf c USING (n, harmonic_id)
+                    JOIN candidate_pool p ON p.n = q.n AND p.candidate_song_id = c.song_id
+                    WHERE c.song_id <> ?
+                    GROUP BY q.n, c.song_id
+                    HAVING COUNT(*) >= ?
+                ), scored AS (
+                    SELECT
+                        d.n,
+                        d.candidate_song_id,
+                        d.dot_product / NULLIF(
+                            SQRT(qn.norm_sq_tfidf_log_count) * SQRT(cn.norm_sq_tfidf_log_count),
+                            0
+                        ) AS similarity_score,
+                        d.shared_features,
+                        m.release_year,
+                        m.decade,
+                        m.main_genre,
+                        m.artist_id,
+                        m.spotify_artist_id,
+                        m.spotify_song_id
+                    FROM candidate_dots d
+                    JOIN song_harmonic_norm_components qn
+                        ON qn.song_id = ? AND qn.n = d.n
+                    JOIN song_harmonic_norm_components cn
+                        ON cn.song_id = d.candidate_song_id AND cn.n = d.n
+                    CROSS JOIN q_meta qm
+                    LEFT JOIN song_metadata m ON m.id = d.candidate_song_id
+                    {candidate_where}
+                )
+                SELECT *
+                FROM scored
+                QUALIFY ROW_NUMBER() OVER (
+                    PARTITION BY n
+                    ORDER BY {scored_spotify_order} similarity_score DESC, shared_features DESC, candidate_song_id
+                ) <= ?
+                ORDER BY n, {scored_spotify_order} similarity_score DESC
+                """,
+                [
+                    song_id,
+                    song_id,
+                    max_df_rate,
+                    candidate_features,
+                    song_id,
+                    min_shared,
+                    candidate_pool,
+                    song_id,
+                    min_shared,
+                    song_id,
+                    sql_limit,
+                ],
+            ).fetchdf()
     finally:
         con.close()
 
@@ -1251,6 +1803,8 @@ def handle_api(path: str, params: dict[str, list[str]]) -> dict:
         return api_search(params)
     if path == "/api/song":
         return api_song(parse_int(params.get("song_id", [None])[0]))
+    if path == "/api/chords":
+        return api_chords(parse_int(params.get("song_id", [None])[0]))
     if path == "/api/spotify":
         return api_spotify(params)
     if path == "/api/similar":
@@ -1273,13 +1827,13 @@ class Handler(BaseHTTPRequestHandler):
     def send_json_response(self, path: str, params: dict[str, list[str]]) -> None:
         try:
             payload = handle_api(path, params)
-            body = json.dumps(payload, default=str).encode("utf-8")
+            body = json.dumps(json_safe(payload), default=str, allow_nan=False).encode("utf-8")
             self.send_response(200)
         except ApiError as exc:
-            body = json.dumps({"error": exc.message}).encode("utf-8")
+            body = json.dumps({"error": exc.message}, allow_nan=False).encode("utf-8")
             self.send_response(exc.status)
         except Exception as exc:
-            body = json.dumps({"error": str(exc)}).encode("utf-8")
+            body = json.dumps({"error": str(exc)}, allow_nan=False).encode("utf-8")
             self.send_response(500)
 
         self.send_header("Content-Type", "application/json")

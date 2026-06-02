@@ -11,9 +11,14 @@
     <div>
       <p class="eyebrow">Harmonic similarity explorer</p>
       <h1>Song Space</h1>
+      <p class="app-subtitle">This clusters songs by similar transposition-invariant harmonic vocabulary and nothing else.</p>
+      <p class="data-source">Built from the Chordonomicon dataset: chord charts pooled from Ultimate Guitar.</p>
     </div>
-    <div class="status-strip" id="statusStrip">
-      <span>Loading index</span>
+    <div class="header-side">
+      <a class="repo-link" href="https://github.com/juansalinas2/harmonic-trends" target="_blank" rel="noreferrer" aria-label="Open the Harmonic Trends GitHub repository">GitHub Repo</a>
+      <div class="status-strip" id="statusStrip">
+        <span>Loading index</span>
+      </div>
     </div>
   </header>
 
@@ -26,7 +31,11 @@
         </div>
         <div class="search-box">
           <input id="searchInput" type="search" placeholder="song, artist, id, genre">
-          <button id="searchButton" type="button" title="Search">⌕</button>
+          <button id="searchButton" type="button" title="Search" aria-label="Search songs">⌕</button>
+        </div>
+        <div class="artist-discovery">
+          <button id="randomArtistButton" class="shuffle-button" type="button">Shuffle Artist</button>
+          <div id="featuredArtists" class="artist-chip-list" aria-label="Featured artists"></div>
         </div>
       </div>
 
@@ -37,7 +46,7 @@
       </div>
 
       <div class="preview-panel" id="previewPanel">
-        <span class="muted">Spotify preview or Chordonomicon chord excerpt appears here.</span>
+        <span class="muted">Spotify preview and source chord-string controls appear here.</span>
       </div>
 
       <div class="scale-controls">
@@ -57,6 +66,17 @@
           <button class="preset-button" type="button" data-preset="rare">Rare Fingerprints</button>
           <button class="preset-button" type="button" data-preset="long">Long Patterns</button>
         </div>
+      </div>
+
+      <div class="scoring-controls">
+        <div class="section-title">
+          <h2>Scoring Mode</h2>
+        </div>
+        <div class="segmented-control" aria-label="Scoring mode">
+          <button class="scoring-button active" type="button" data-scoring-mode="fast">Fast shortlist</button>
+          <button class="scoring-button" type="button" data-scoring-mode="exact">Exact scan</button>
+        </div>
+        <p class="control-note" id="scoringModeHelp">Fast mode finds candidates with rare shared patterns, then reranks them by exact harmonic TF-IDF cosine.</p>
       </div>
 
       <div class="query-options">
@@ -96,10 +116,10 @@
               <p class="eyebrow">Nearest neighbors</p>
               <h2>Similar Songs</h2>
             </div>
-            <div class="metric-note">TF-IDF cosine over selected pattern lengths</div>
+            <div id="rankingModeNote" class="metric-note">Chord-pattern TF-IDF; no artist, genre, popularity, lyrics, or audio in the score</div>
           </div>
           <div id="resultsTable" class="results-table empty-state">
-            Run a query to see ranked harmonic neighbors.
+            Pick a seed song to see neighbors ranked only by shared harmonic vocabulary.
           </div>
         </section>
 

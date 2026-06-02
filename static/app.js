@@ -6,8 +6,10 @@ const state = {
   resultSpotifyOnly: true,
   excludeSameArtist: false,
   crossGenreOnly: false,
+  exactScan: false,
   discoveryPreset: "balanced",
   currentView: "neighbors",
+  featuredArtist: "",
   scales: [3, 4, 5, 6, 7, 8],
   weights: { 3: 1, 4: 1.33, 5: 1.67, 6: 2, 7: 2.33, 8: 2.67 },
   activeScales: new Set([3, 4, 5, 6, 7, 8])
@@ -15,7 +17,25 @@ const state = {
 
 const fmt = new Intl.NumberFormat("en-US");
 const spotifyMetaCache = new Map();
+const chordStringCache = new Map();
 const defaultWeights = { 3: 1, 4: 1.33, 5: 1.67, 6: 2, 7: 2.33, 8: 2.67 };
+const featuredArtists = [
+  "Green Day",
+  "Nirvana",
+  "Stevie Wonder",
+  "The Beatles",
+  "Queen",
+  "Bob Dylan",
+  "Taylor Swift",
+  "David Bowie",
+  "Radiohead",
+  "Prince",
+  "Fleetwood Mac",
+  "Michael Jackson",
+  "Madonna",
+  "The Rolling Stones",
+  "Metallica"
+];
 const presets = {
   balanced: {
     active: [3, 4, 5, 6, 7, 8],
@@ -44,8 +64,8 @@ function esc(value) {
     .replaceAll("'", "&#39;");
 }
 
-function compact(value) {
-  if (value === null || value === undefined || value === "") return "unknown";
+function metaValue(value) {
+  if (value === null || value === undefined || value === "") return null;
   return String(value);
 }
 
@@ -125,6 +145,36 @@ function renderScales() {
   });
 }
 
+function renderFeaturedArtists() {
+  $("featuredArtists").innerHTML = featuredArtists.map((artist) => `
+    <button
+      class="artist-chip ${state.featuredArtist === artist ? "active" : ""}"
+      type="button"
+      data-featured-artist="${esc(artist)}"
+    >${esc(artist)}</button>
+  `).join("");
+
+  document.querySelectorAll("[data-featured-artist]").forEach((button) => {
+    button.addEventListener("click", () => loadFeaturedArtist(button.dataset.featuredArtist));
+  });
+}
+
+function randomFeaturedArtist() {
+  if (featuredArtists.length <= 1) return featuredArtists[0];
+  let next = state.featuredArtist;
+  while (next === state.featuredArtist) {
+    next = featuredArtists[Math.floor(Math.random() * featuredArtists.length)];
+  }
+  return next;
+}
+
+async function loadFeaturedArtist(artist = randomFeaturedArtist()) {
+  state.featuredArtist = artist;
+  $("searchInput").value = artist;
+  renderFeaturedArtists();
+  await search();
+}
+
 function renderStatus(stats) {
   const terms = stats.table_counts.find((row) => row.table_name === "song_harmonic_terms")?.rows;
   const features = stats.table_counts.find((row) => row.table_name === "harmonic_song_document_frequency")?.rows;
@@ -157,6 +207,22 @@ function updatePresetButtons() {
   });
 }
 
+function updateScoringButtons() {
+  document.querySelectorAll("[data-scoring-mode]").forEach((button) => {
+    const isExactButton = button.dataset.scoringMode === "exact";
+    button.classList.toggle("active", isExactButton === state.exactScan);
+  });
+  $("scoringModeHelp").textContent = state.exactScan
+    ? "Exact mode scans every song sharing selected harmonic patterns. It is slower, but best for auditing suspicious rankings."
+    : "Fast mode finds candidates with rare shared patterns, then reranks them by exact harmonic TF-IDF cosine.";
+}
+
+function renderRankingMode(strategy = {}) {
+  $("rankingModeNote").textContent = strategy.exact_scan
+    ? "Exact harmonic TF-IDF cosine over every matching song; no artist, genre, popularity, lyrics, or audio in the score"
+    : "Fast rare-pattern shortlist, then exact harmonic TF-IDF cosine rerank; no artist, genre, popularity, lyrics, or audio in the score";
+}
+
 function applyPreset(name) {
   const preset = presets[name];
   if (!preset) return;
@@ -174,13 +240,14 @@ function songLabel(song) {
 
 function songMetaParts(song, options = {}) {
   const includeSpotify = options.includeSpotify ?? true;
-  const artist = song.spotify_artist || song.spotify_artist_name || compact(song.artist_id);
-  return [
-    compact(song.main_genre),
-    song.release_year || song.decade,
+  const artist = song.spotify_artist || song.spotify_artist_name || metaValue(song.artist_id);
+  const parts = [
+    metaValue(song.main_genre),
+    metaValue(song.release_year || song.decade),
     artist,
     includeSpotify && song.spotify_song_id ? `Spotify ${song.spotify_song_id}` : null
   ].filter(Boolean);
+  return parts.length ? parts : ["metadata unavailable"];
 }
 
 function songMeta(song, options = {}) {
@@ -368,6 +435,7 @@ function previewMarkup(song, label) {
         <a href="${spotifyLink(song)}" target="_blank" rel="noreferrer">Spotify</a>
         <span data-spotify-name="${esc(song.spotify_song_id)}" class="song-meta">Loading Spotify title...</span>
       </div>
+      ${chordStringLoaderMarkup(song)}
     `;
   }
 
@@ -375,7 +443,68 @@ function previewMarkup(song, label) {
     <div class="preview-title">${esc(label)}</div>
     <div class="song-meta">No Spotify track id is available in the local metadata.</div>
     <div class="chord-excerpt">${esc(song.chord_excerpt || "No chord excerpt found.")}</div>
+    ${chordStringLoaderMarkup(song)}
   `;
+}
+
+function chordStringLoaderMarkup(song) {
+  const id = song.song_id ?? song.candidate_song_id;
+  return `
+    <div class="chord-loader">
+      <button class="secondary-action" type="button" data-chord-song-id="${esc(id)}">Show original chord string</button>
+      <div class="chord-string-panel" data-chord-output hidden></div>
+    </div>
+  `;
+}
+
+function chordStringMarkup(payload) {
+  const original = payload.chords || payload.chords_nosections || "";
+  const clean = payload.chords_nosections || "";
+  const hasClean = clean && clean !== original;
+  return `
+    <div class="chord-string-meta">
+      ${fmt.format(payload.original_tokens || 0)} source tokens · ${fmt.format(payload.chord_tokens || 0)} chord tokens
+    </div>
+    <pre class="chord-string">${esc(original || "No chord string found.")}</pre>
+    ${hasClean ? `
+      <details class="clean-chords">
+        <summary>Clean chord sequence</summary>
+        <pre class="chord-string">${esc(clean)}</pre>
+      </details>
+    ` : ""}
+  `;
+}
+
+function bindChordButtons(container) {
+  container.querySelectorAll("[data-chord-song-id]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const panel = button.closest(".chord-loader").querySelector("[data-chord-output]");
+      const songId = button.dataset.chordSongId;
+      if (button.dataset.loaded === "true") {
+        panel.hidden = !panel.hidden;
+        button.textContent = panel.hidden ? "Show original chord string" : "Hide original chord string";
+        return;
+      }
+
+      button.disabled = true;
+      panel.hidden = false;
+      panel.innerHTML = `<div class="song-meta">Loading chord string...</div>`;
+      try {
+        let payload = chordStringCache.get(songId);
+        if (!payload) {
+          payload = await api("/api/chords", { song_id: songId });
+          chordStringCache.set(songId, payload);
+        }
+        panel.innerHTML = chordStringMarkup(payload);
+        button.dataset.loaded = "true";
+        button.textContent = "Hide original chord string";
+      } catch (error) {
+        panel.innerHTML = `<div class="song-meta">${esc(error.message)}</div>`;
+      } finally {
+        button.disabled = false;
+      }
+    });
+  });
 }
 
 async function hydrateSpotifyNames(container) {
@@ -389,16 +518,22 @@ async function hydrateSpotifyNames(container) {
 
 async function renderPreview(song) {
   $("previewPanel").innerHTML = previewMarkup(song, "Selected Song Preview");
+  bindChordButtons($("previewPanel"));
   await hydrateSpotifyNames($("previewPanel"));
 }
 
 async function renderCandidatePreview(song) {
   $("candidatePreview").innerHTML = previewMarkup(song, "Selected Result Preview");
+  bindChordButtons($("candidatePreview"));
   await hydrateSpotifyNames($("candidatePreview"));
 }
 
 async function search() {
   const q = $("searchInput").value.trim();
+  if (q !== state.featuredArtist) {
+    state.featuredArtist = featuredArtists.includes(q) ? q : "";
+    renderFeaturedArtists();
+  }
   $("searchResults").innerHTML = `<div class="empty-state">Searching...</div>`;
   const payload = await api("/api/search", {
     q,
@@ -472,8 +607,10 @@ async function runSimilarity() {
     min_shared: $("minSharedInput").value,
     spotify: spotifyMode(state.resultSpotifyOnly),
     exclude_same_artist: state.excludeSameArtist ? "1" : "0",
-    cross_genre: state.crossGenreOnly ? "1" : "0"
+    cross_genre: state.crossGenreOnly ? "1" : "0",
+    exact: state.exactScan ? "1" : "0"
   });
+  renderRankingMode(payload.strategy);
   renderResults(payload.results);
   loadComparison();
   if (payload.results.length) selectResult(payload.results[0]);
@@ -488,7 +625,8 @@ async function loadComparison() {
     min_shared: Math.min(Number($("minSharedInput").value || 4), 4),
     spotify: spotifyMode(state.resultSpotifyOnly),
     exclude_same_artist: state.excludeSameArtist ? "1" : "0",
-    cross_genre: state.crossGenreOnly ? "1" : "0"
+    cross_genre: state.crossGenreOnly ? "1" : "0",
+    exact: state.exactScan ? "1" : "0"
   });
   renderComparison(payload.results_by_n);
 }
@@ -672,9 +810,12 @@ async function init() {
   updateToggle($("excludeArtistToggle"), state.excludeSameArtist);
   updateToggle($("crossGenreToggle"), state.crossGenreOnly);
   updatePresetButtons();
+  updateScoringButtons();
+  renderFeaturedArtists();
   renderFocusBar();
 
   $("searchButton").addEventListener("click", search);
+  $("randomArtistButton").addEventListener("click", () => loadFeaturedArtist());
   $("searchInput").addEventListener("keydown", (event) => {
     if (event.key === "Enter") search();
   });
@@ -702,6 +843,13 @@ async function init() {
   document.querySelectorAll("[data-preset]").forEach((button) => {
     button.addEventListener("click", () => applyPreset(button.dataset.preset));
   });
+  document.querySelectorAll("[data-scoring-mode]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.exactScan = button.dataset.scoringMode === "exact";
+      updateScoringButtons();
+      runSimilarity();
+    });
+  });
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => setView(button.dataset.view));
   });
@@ -712,12 +860,7 @@ async function init() {
 
   const stats = await api("/api/stats");
   renderStatus(stats);
-  const payload = await api("/api/search", {
-    q: "",
-    limit: 12,
-    spotify: spotifyMode(state.searchSpotifyOnly)
-  });
-  renderSearchResults(payload.results);
+  await loadFeaturedArtist(randomFeaturedArtist());
 }
 
 init().catch((error) => {

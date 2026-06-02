@@ -331,6 +331,8 @@ for songs with nearby harmonic profiles rather than only nearby metadata labels.
 - `scripts/deploy_hf_space.py`: deployment helper for uploading the static
   Space with `huggingface_hub`.
 - `scripts/deploy_hf_app_space.py`: deployment helper for the Docker Space app.
+- `scripts/build_app_duckdb.py`: builds the compact runtime DuckDB used by the
+  deployed explorer.
 - `requirements.txt`: minimal Python dependencies for running the notebooks.
 - `data/`: ignored local data directory for raw downloads, DuckDB files, and
   generated outputs.
@@ -359,13 +361,35 @@ Deploy the app files:
 HF_TOKEN=... python3 scripts/deploy_hf_app_space.py --repo-id USERNAME/harmonic-trends-explorer
 ```
 
-Do not commit the DuckDB file. Put the production database at:
+Do not commit DuckDB files. Build the compact runtime database first:
+
+```bash
+python3 scripts/build_app_duckdb.py --replace
+```
+
+The full research database stays local. The deployed app uses:
+
+```text
+data/processed/harmonic_trends_app.duckdb
+```
+
+At runtime, the Space downloads it into:
 
 ```text
 /data/harmonic_trends.duckdb
 ```
 
-or set:
+For the free Hugging Face setup, upload the app database to a private Dataset:
+
+```text
+juansalinas2/harmonic-trends-data
+```
+
+Then add an `HF_TOKEN` Space secret with read access. The container downloads
+the database from that Dataset on startup if `/data/harmonic_trends.duckdb` is
+missing.
+
+Direct URL download is also supported:
 
 ```text
 HARMONIC_DB_URL=https://...
@@ -375,6 +399,8 @@ Useful runtime paths:
 
 ```text
 HARMONIC_DB_PATH=/data/harmonic_trends.duckdb
+HARMONIC_DB_REPO_ID=juansalinas2/harmonic-trends-data
+HARMONIC_DB_FILENAME=harmonic_trends_app.duckdb
 SPOTIFY_CACHE_PATH=/data/spotify_metadata_cache.sqlite
 SONGS_MASTER_PARQUET_PATH=/data/songs_master.parquet
 DUCKDB_THREADS=4
@@ -453,12 +479,18 @@ remaining notebooks build and analyze the harmonic vocabulary.
 
 ## Data
 
-The `data/` directory is intentionally ignored by Git. The raw dataset,
-intermediate DuckDB database, and generated outputs are produced by the
-notebooks and can be rebuilt locally. The production database is:
+The `data/` directory is intentionally ignored by Git. The raw dataset, full
+research DuckDB, compact app DuckDB, and generated outputs are produced by the
+notebooks and scripts and can be rebuilt locally. The full database is:
 
 ```text
 data/processed/harmonic_trends.duckdb
+```
+
+The deployable app database is:
+
+```text
+data/processed/harmonic_trends_app.duckdb
 ```
 
 Spotify title/artist search uses a local sidecar cache populated from Spotify

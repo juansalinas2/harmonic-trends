@@ -26,20 +26,27 @@ The app expects the similarity index built by notebook 12:
 
 ## Core Data
 
-The DuckDB database is the core deployment artifact. It is too large for normal
-Git history, so the container looks for it at:
+The app DuckDB is the core deployment artifact. It is built from the full local
+research database with:
+
+```bash
+python3 scripts/build_app_duckdb.py --replace
+```
+
+The built file is `data/processed/harmonic_trends_app.duckdb`. It is kept out of
+Git and stored in a private Hugging Face Dataset. The container downloads it to:
 
 ```text
 /data/harmonic_trends.duckdb
 ```
 
-Recommended options:
+Recommended setup:
 
-- Enable persistent storage for the Space and place the DuckDB file at
-  `/data/harmonic_trends.duckdb`.
-- Host the DuckDB file in a Hugging Face Dataset or another durable object
-  store, then set `HARMONIC_DB_URL` so the container downloads it on startup.
-  Persistent storage is strongly recommended so this only happens once.
+- Store the DuckDB in the private Dataset
+  `juansalinas2/harmonic-trends-data`.
+- Add a Space secret named `HF_TOKEN` with read access to that Dataset.
+- On startup, the container downloads the DB to `/data/harmonic_trends.duckdb`
+  if it is missing.
 
 Optional files:
 
@@ -52,8 +59,14 @@ Useful runtime variables:
 
 ```text
 HARMONIC_DB_PATH=/data/harmonic_trends.duckdb
+HARMONIC_DB_REPO_ID=juansalinas2/harmonic-trends-data
+HARMONIC_DB_FILENAME=harmonic_trends_app.duckdb
 SPOTIFY_CACHE_PATH=/data/spotify_metadata_cache.sqlite
+SPOTIFY_CACHE_REPO_ID=juansalinas2/harmonic-trends-data
+SPOTIFY_CACHE_FILENAME=spotify_metadata_cache.sqlite
 SONGS_MASTER_PARQUET_PATH=/data/songs_master.parquet
+SONGS_MASTER_REPO_ID=juansalinas2/harmonic-trends-data
+SONGS_MASTER_FILENAME=songs_master.parquet
 HARMONIC_DB_URL=
 SPOTIFY_CACHE_URL=
 DUCKDB_THREADS=4

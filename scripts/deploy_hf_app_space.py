@@ -92,7 +92,7 @@ def main() -> None:
         )
 
     print(f"Deployed app files: https://huggingface.co/spaces/{args.repo_id}")
-    print("Database is not uploaded. Configure /data/harmonic_trends.duckdb or HARMONIC_DB_URL in the Space.")
+    print("Database is not uploaded by this script. Configure the Space Dataset variables or HARMONIC_DB_URL.")
 
 
 if __name__ == "__main__":
