@@ -104,9 +104,18 @@
       </div>
 
       <nav class="view-tabs" aria-label="Explorer views">
-        <button id="neighborsTab" class="tab-button active" type="button" data-view="neighbors">Neighbors</button>
-        <button id="scalesTab" class="tab-button" type="button" data-view="scales">Pattern Lengths</button>
-        <button id="evidenceTab" class="tab-button" type="button" data-view="evidence">Evidence</button>
+        <button id="neighborsTab" class="tab-button active" type="button" data-view="neighbors">
+          <span>Neighbors</span>
+          <strong id="neighborsTabCount">0</strong>
+        </button>
+        <button id="scalesTab" class="tab-button" type="button" data-view="scales">
+          <span>Pattern Lengths</span>
+          <strong id="scalesTabCount">6</strong>
+        </button>
+        <button id="evidenceTab" class="tab-button" type="button" data-view="evidence">
+          <span>Evidence</span>
+          <strong id="evidenceTabCount">0</strong>
+        </button>
       </nav>
 
       <div class="view-stack">

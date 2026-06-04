@@ -721,6 +721,13 @@ def candidate_filter_sql(
     cross_genre: bool,
 ) -> str:
     conditions: list[str] = []
+    conditions.append(
+        """
+        qm.spotify_song_id IS NULL OR m.spotify_song_id IS NULL
+        OR qm.spotify_song_id = '' OR m.spotify_song_id = ''
+        OR qm.spotify_song_id <> m.spotify_song_id
+        """
+    )
     if spotify_mode == "only":
         conditions.append("m.spotify_song_id IS NOT NULL AND m.spotify_song_id <> ''")
     if exclude_same_artist:
@@ -1230,7 +1237,7 @@ def api_similar(params: dict[str, list[str]]) -> dict:
                 ), {norms_cte}, q_norm AS (
                     SELECT norm FROM norms WHERE song_id = ?
                 ), q_meta AS (
-                    SELECT artist_id, spotify_artist_id, main_genre
+                    SELECT artist_id, spotify_artist_id, spotify_song_id, main_genre
                     FROM song_metadata
                     WHERE id = ?
                 )
@@ -1312,7 +1319,7 @@ def api_similar(params: dict[str, list[str]]) -> dict:
                 ), {norms_cte}, q_norm AS (
                     SELECT norm FROM norms WHERE song_id = ?
                 ), q_meta AS (
-                    SELECT artist_id, spotify_artist_id, main_genre
+                    SELECT artist_id, spotify_artist_id, spotify_song_id, main_genre
                     FROM song_metadata
                     WHERE id = ?
                 )
@@ -1349,6 +1356,73 @@ def api_similar(params: dict[str, list[str]]) -> dict:
                     sql_limit,
                 ],
             ).fetchdf()
+        candidate_ids = [
+            int(value)
+            for value in df.get("candidate_song_id", pd.Series(dtype="int64")).dropna().tolist()
+        ]
+        if candidate_ids:
+            candidate_values = ", ".join(["(?)"] * len(candidate_ids))
+            by_n = con.execute(
+                f"""
+                WITH candidate_ids(candidate_song_id) AS (
+                    VALUES {candidate_values}
+                ), norms AS (
+                    SELECT
+                        nc.song_id,
+                        SQRT(SUM(nc.{norm_col} * a.alpha * a.alpha)) AS norm
+                    FROM song_harmonic_norm_components nc
+                    JOIN selected_n_weights a USING (n)
+                    WHERE nc.song_id = ? OR nc.song_id IN (
+                        SELECT candidate_song_id FROM candidate_ids
+                    )
+                    GROUP BY nc.song_id
+                ), q AS (
+                    SELECT
+                        w.song_id,
+                        w.n,
+                        w.harmonic_id,
+                        w.{weight_column} * a.alpha AS weight
+                    FROM song_harmonic_tfidf w
+                    JOIN selected_n_weights a USING (n)
+                    WHERE w.song_id = ?
+                ), shared AS (
+                    SELECT
+                        c.song_id AS candidate_song_id,
+                        q.n,
+                        q.weight * c.{weight_column} * a.alpha AS raw_contribution
+                    FROM q
+                    JOIN song_harmonic_tfidf c USING (n, harmonic_id)
+                    JOIN selected_n_weights a ON a.n = c.n
+                    JOIN candidate_ids ids ON ids.candidate_song_id = c.song_id
+                ), denom AS (
+                    SELECT
+                        ids.candidate_song_id,
+                        q_norm.norm * c_norm.norm AS norm_product
+                    FROM candidate_ids ids
+                    JOIN norms q_norm ON q_norm.song_id = ?
+                    JOIN norms c_norm ON c_norm.song_id = ids.candidate_song_id
+                )
+                SELECT
+                    shared.candidate_song_id,
+                    shared.n,
+                    COUNT(*) AS shared_features,
+                    SUM(raw_contribution) / NULLIF(MAX(norm_product), 0) AS cosine_contribution
+                FROM shared
+                JOIN denom USING (candidate_song_id)
+                GROUP BY shared.candidate_song_id, shared.n
+                ORDER BY shared.candidate_song_id, shared.n
+                """,
+                [*candidate_ids, song_id, song_id, song_id],
+            ).fetchdf()
+        else:
+            by_n = pd.DataFrame(
+                columns=[
+                    "candidate_song_id",
+                    "n",
+                    "shared_features",
+                    "cosine_contribution",
+                ]
+            )
     finally:
         con.unregister("selected_n_weights")
         con.close()
@@ -1357,6 +1431,12 @@ def api_similar(params: dict[str, list[str]]) -> dict:
         id_key="candidate_song_id",
         limit=top_k,
     )
+    summaries: dict[int, list[dict]] = {}
+    for row in rows_to_records(by_n):
+        candidate_id = int(row.pop("candidate_song_id"))
+        summaries.setdefault(candidate_id, []).append(row)
+    for record in records:
+        record["shared_by_n"] = summaries.get(int(record["candidate_song_id"]), [])
     return {
         "song_id": song_id,
         "ns": selected_ns,
@@ -1497,7 +1577,7 @@ def api_compare_n(params: dict[str, list[str]]) -> dict:
                     FROM song_harmonic_tfidf w
                     WHERE w.song_id = ?
                 ), q_meta AS (
-                    SELECT artist_id, spotify_artist_id, main_genre
+                    SELECT artist_id, spotify_artist_id, spotify_song_id, main_genre
                     FROM song_metadata
                     WHERE id = ?
                 ), candidate_dots AS (
@@ -1567,7 +1647,7 @@ def api_compare_n(params: dict[str, list[str]]) -> dict:
                     JOIN harmonic_song_document_frequency df USING (n, harmonic_id)
                     WHERE w.song_id = ?
                 ), q_meta AS (
-                    SELECT artist_id, spotify_artist_id, main_genre
+                    SELECT artist_id, spotify_artist_id, spotify_song_id, main_genre
                     FROM song_metadata
                     WHERE id = ?
                 ), q_candidate_features AS (

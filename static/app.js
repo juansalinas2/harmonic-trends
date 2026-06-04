@@ -133,6 +133,7 @@ function renderScales() {
       if (input.checked) state.activeScales.add(n);
       else state.activeScales.delete(n);
       input.closest("[data-scale-row]").classList.toggle("active", input.checked);
+      updateTabMetrics();
     });
   });
 
@@ -191,6 +192,15 @@ function updateToggle(button, enabled) {
   button.setAttribute("aria-pressed", String(enabled));
 }
 
+function updateTabMetrics() {
+  $("neighborsTabCount").textContent = fmt.format(state.results.length);
+  $("scalesTabCount").textContent = fmt.format(state.activeScales.size);
+  $("evidenceTabCount").textContent = state.selectedResult
+    ? fmt.format(state.selectedResult.shared_features || 0)
+    : "0";
+  $("evidenceTab").classList.toggle("ready", Boolean(state.selectedResult));
+}
+
 function setView(view) {
   state.currentView = view;
   document.querySelectorAll("[data-view]").forEach((button) => {
@@ -231,6 +241,7 @@ function applyPreset(name) {
   state.weights = { ...defaultWeights, ...preset.weights };
   renderScales();
   updatePresetButtons();
+  updateTabMetrics();
   runSimilarity();
 }
 
@@ -357,6 +368,44 @@ function renderFocusBar() {
     </div>
   `;
   hydrateSpotifyLabels($("focusBar"));
+}
+
+function resultLengthSummary(row) {
+  const byN = row.shared_by_n || [];
+  if (!byN.length) {
+    return `<span class="neighbor-signal-empty">Evidence loads when selected</span>`;
+  }
+  const maxShared = Math.max(...byN.map((item) => Number(item.shared_features || 0)), 1);
+  const strongest = [...byN].sort((a, b) => {
+    const contributionDelta = Number(b.cosine_contribution || 0) - Number(a.cosine_contribution || 0);
+    if (contributionDelta) return contributionDelta;
+    return Number(b.shared_features || 0) - Number(a.shared_features || 0);
+  })[0];
+  return `
+    <span class="neighbor-signal-text">Strongest H${strongest?.n || "?"}</span>
+    <span class="mini-bars" aria-hidden="true">
+      ${state.scales.map((n) => {
+        const item = byN.find((entry) => Number(entry.n) === n);
+        const value = Number(item?.shared_features || 0);
+        const height = value ? Math.max(18, Math.round((value / maxShared) * 100)) : 0;
+        return `<span class="mini-bar n-${n}" style="height:${height}%"></span>`;
+      }).join("")}
+    </span>
+  `;
+}
+
+function renderEvidenceEmpty() {
+  $("pairLabel").textContent = "";
+  $("candidatePreview").innerHTML = "";
+  $("evidenceSummary").innerHTML = "";
+  $("breakdown").innerHTML = "";
+  const hasResults = state.results.length > 0;
+  $("evidenceTable").innerHTML = `
+    <div class="empty-state evidence-empty">
+      <strong>${hasResults ? "Select a neighbor to inspect shared chord sequences." : "Run a query to inspect shared chord sequences."}</strong>
+      <span>${hasResults ? "Neighbor cards show the strongest pattern length and shared-pattern shape before you open this tab." : "Evidence will show common progressions, rare matches, and length-by-length contribution."}</span>
+    </div>
+  `;
 }
 
 async function hydrateSpotifyLabels(container = document) {
@@ -547,6 +596,9 @@ async function selectSong(songId) {
   const payload = await api("/api/song", { song_id: songId });
   state.selectedSong = payload.song;
   state.selectedResult = null;
+  state.results = [];
+  updateTabMetrics();
+  renderEvidenceEmpty();
   renderFocusBar();
   renderSelectedSong(payload);
   await runSimilarity();
@@ -554,9 +606,13 @@ async function selectSong(songId) {
 
 function renderResults(results) {
   state.results = results;
+  updateTabMetrics();
   if (!results.length) {
     const suffix = state.resultSpotifyOnly ? " Try turning off Neighbors w/ Spotify ID." : "";
     $("resultsTable").innerHTML = `<div class="empty-state">No candidates matched the current scale and shared-feature settings.${suffix}</div>`;
+    state.selectedResult = null;
+    updateTabMetrics();
+    renderEvidenceEmpty();
     return;
   }
 
@@ -568,6 +624,7 @@ function renderResults(results) {
           <span class="neighbor-main">
             <strong>${spotifyLabelMarkup(row, { fallbackTitle: `Song ${row.candidate_song_id}` })}</strong>
             <span class="song-meta result-submeta">${resultMeta(row)}</span>
+            <span class="neighbor-signal">${resultLengthSummary(row)}</span>
             ${row.spotify_song_id ? `<span class="track-badge">Spotify track</span>` : ""}
           </span>
           <span class="neighbor-stats">
@@ -595,10 +652,17 @@ async function runSimilarity() {
   if (!state.selectedSong) return;
   if (!selectedNs().length) {
     $("resultsTable").innerHTML = `<div class="empty-state">Select at least one chord pattern length.</div>`;
+    state.results = [];
+    state.selectedResult = null;
+    updateTabMetrics();
+    renderEvidenceEmpty();
     return;
   }
 
   $("resultsTable").innerHTML = `<div class="empty-state">Computing harmonic neighbors...</div>`;
+  state.selectedResult = null;
+  updateTabMetrics();
+  renderEvidenceEmpty();
   const payload = await api("/api/similar", {
     song_id: state.selectedSong.song_id,
     ns: selectedNs().join(","),
@@ -660,6 +724,7 @@ function renderComparison(resultsByN) {
 async function selectResult(result, openEvidence = false) {
   if (!state.selectedSong || !result) return;
   state.selectedResult = result;
+  updateTabMetrics();
   renderResults(state.results);
   renderFocusBar();
   if (openEvidence) setView("evidence");
@@ -813,6 +878,8 @@ async function init() {
   updateScoringButtons();
   renderFeaturedArtists();
   renderFocusBar();
+  updateTabMetrics();
+  renderEvidenceEmpty();
 
   $("searchButton").addEventListener("click", search);
   $("randomArtistButton").addEventListener("click", () => loadFeaturedArtist());
@@ -856,6 +923,7 @@ async function init() {
   $("allScalesButton").addEventListener("click", () => {
     state.activeScales = new Set(state.scales);
     renderScales();
+    updateTabMetrics();
   });
 
   const stats = await api("/api/stats");
