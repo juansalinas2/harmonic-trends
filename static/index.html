@@ -3,20 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Harmonic Explorer</title>
+  <title>Harmonic Trends Explorer</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <header class="app-header">
-    <div>
-      <p class="eyebrow">Harmonic similarity explorer</p>
-      <h1>Song Space</h1>
-      <p class="app-subtitle">This clusters songs by similar transposition-invariant harmonic vocabulary and nothing else.</p>
-      <p class="data-source">Built from the Chordonomicon dataset: chord charts pooled from Ultimate Guitar.</p>
+    <div class="brand-block">
+      <p class="eyebrow">Explainable music retrieval</p>
+      <h1>Harmonic Trends Explorer</h1>
+      <p class="app-subtitle">Find songs that share harmonic vocabulary—even across artists, genres, and keys.</p>
+      <p class="data-source">Similarity uses transposition-invariant chord patterns only. Metadata never enters the score.</p>
     </div>
     <div class="header-side">
-      <a class="repo-link" href="https://github.com/juansalinas2/harmonic-trends" target="_blank" rel="noreferrer" aria-label="Open the Harmonic Trends GitHub repository">GitHub Repo</a>
-      <div class="status-strip" id="statusStrip">
+      <a class="repo-link" href="https://github.com/juansalinas2/harmonic-trends" target="_blank" rel="noreferrer" aria-label="Open the Harmonic Trends methodology on GitHub">View methodology</a>
+      <div class="status-strip" id="statusStrip" role="status" aria-live="polite">
         <span>Loading index</span>
       </div>
     </div>
@@ -26,130 +26,162 @@
     <aside class="control-panel">
       <div class="search-row">
         <div class="section-title compact-title">
-          <label for="searchInput">Seed Song</label>
-          <button id="spotifySearchToggle" class="toggle-button active" type="button" aria-pressed="true">w/ Spotify ID</button>
+          <div>
+            <label for="searchInput">1. Choose a seed song</label>
+            <p class="control-copy">Search the index or start with a featured artist.</p>
+          </div>
         </div>
         <div class="search-box">
-          <input id="searchInput" type="search" placeholder="song, artist, id, genre">
-          <button id="searchButton" type="button" title="Search" aria-label="Search songs">⌕</button>
+          <input id="searchInput" type="search" placeholder="Song or artist" autocomplete="off">
+          <button id="searchButton" type="button">Search</button>
         </div>
         <div class="artist-discovery">
-          <button id="randomArtistButton" class="shuffle-button" type="button">Shuffle Artist</button>
+          <div class="search-actions">
+            <button id="randomArtistButton" class="shuffle-button" type="button">Surprise me</button>
+            <button id="spotifySearchToggle" class="toggle-button active" type="button" aria-pressed="true">Spotify links only</button>
+          </div>
           <div id="featuredArtists" class="artist-chip-list" aria-label="Featured artists"></div>
         </div>
       </div>
 
-      <div class="song-list" id="searchResults"></div>
+      <div class="song-list" id="searchResults" aria-live="polite"></div>
 
       <div class="selected-song" id="selectedSong">
-        <span class="muted">Select a song to inspect its harmonic neighborhood.</span>
+        <span class="selection-step">2</span>
+        <span class="muted">Select a search result to build its harmonic neighborhood.</span>
       </div>
 
       <div class="preview-panel" id="previewPanel">
-        <span class="muted">Spotify preview and source chord-string controls appear here.</span>
+        <span class="muted">Audio and source chords will appear here.</span>
       </div>
 
-      <div class="scale-controls">
-        <div class="section-title">
-          <h2>Chord Pattern Lengths</h2>
-          <button id="allScalesButton" type="button">All On</button>
-        </div>
-        <div class="scale-grid" id="scaleGrid"></div>
-      </div>
+      <details class="advanced-controls">
+        <summary>
+          <span>
+            <strong>Similarity settings</strong>
+            <small>Optional · balanced H3–H8 search by default</small>
+          </span>
+        </summary>
+        <div class="advanced-body">
+          <div class="mode-controls">
+            <div class="section-title">
+              <h2>Discovery mode</h2>
+            </div>
+            <div class="preset-grid">
+              <button class="preset-button active" type="button" data-preset="balanced">Balanced</button>
+              <button class="preset-button" type="button" data-preset="rare">Rare fingerprints</button>
+              <button class="preset-button" type="button" data-preset="long">Long patterns</button>
+            </div>
+          </div>
 
-      <div class="mode-controls">
-        <div class="section-title">
-          <h2>Discovery Mode</h2>
-        </div>
-        <div class="preset-grid">
-          <button class="preset-button active" type="button" data-preset="balanced">Balanced</button>
-          <button class="preset-button" type="button" data-preset="rare">Rare Fingerprints</button>
-          <button class="preset-button" type="button" data-preset="long">Long Patterns</button>
-        </div>
-      </div>
+          <div class="scale-controls">
+            <div class="section-title">
+              <h2>Pattern lengths</h2>
+              <button id="allScalesButton" class="small-button" type="button">Select all</button>
+            </div>
+            <div class="scale-grid" id="scaleGrid"></div>
+          </div>
 
-      <div class="scoring-controls">
-        <div class="section-title">
-          <h2>Scoring Mode</h2>
-        </div>
-        <div class="segmented-control" aria-label="Scoring mode">
-          <button class="scoring-button active" type="button" data-scoring-mode="fast">Fast shortlist</button>
-          <button class="scoring-button" type="button" data-scoring-mode="exact">Exact scan</button>
-        </div>
-        <p class="control-note" id="scoringModeHelp">Fast mode finds candidates with rare shared patterns, then reranks them by exact harmonic TF-IDF cosine.</p>
-      </div>
+          <div class="scoring-controls">
+            <div class="section-title">
+              <h2>Scoring mode</h2>
+            </div>
+            <div class="segmented-control" aria-label="Scoring mode">
+              <button class="scoring-button active" type="button" data-scoring-mode="fast">Fast shortlist</button>
+              <button class="scoring-button" type="button" data-scoring-mode="exact">Exact scan</button>
+            </div>
+            <p class="control-note" id="scoringModeHelp">Fast mode reranks a rare-pattern shortlist with exact harmonic TF-IDF cosine.</p>
+          </div>
 
-      <div class="query-options">
-        <label>
-          Results
-          <input id="topKInput" type="number" min="5" max="100" value="20">
-        </label>
-        <label>
-          Min shared
-          <input id="minSharedInput" type="number" min="1" max="100" value="4">
-        </label>
-      </div>
+          <div class="query-options">
+            <label>
+              Results
+              <input id="topKInput" type="number" min="5" max="100" value="20">
+            </label>
+            <label>
+              Minimum shared patterns
+              <input id="minSharedInput" type="number" min="1" max="100" value="4">
+            </label>
+          </div>
 
-      <button id="spotifyResultsToggle" class="toggle-button wide active" type="button" aria-pressed="true">Neighbors w/ Spotify ID</button>
-      <div class="filter-grid">
-        <button id="excludeArtistToggle" class="toggle-button" type="button" aria-pressed="false">Exclude Same Artist</button>
-        <button id="crossGenreToggle" class="toggle-button" type="button" aria-pressed="false">Cross-Genre Only</button>
-      </div>
-      <button id="runButton" class="primary" type="button">Find Similar Songs</button>
+          <div class="filter-controls">
+            <button id="spotifyResultsToggle" class="toggle-button wide active" type="button" aria-pressed="true">Spotify links only</button>
+            <div class="filter-grid">
+              <button id="excludeArtistToggle" class="toggle-button" type="button" aria-pressed="false">Exclude same artist</button>
+              <button id="crossGenreToggle" class="toggle-button" type="button" aria-pressed="false">Cross-genre only</button>
+            </div>
+          </div>
+        </div>
+      </details>
+
+      <button id="runButton" class="primary" type="button" disabled>Find harmonic neighbors</button>
     </aside>
 
     <section class="content-panel">
       <div class="focus-bar" id="focusBar">
-        <div class="empty-state">Search for a recognizable seed song.</div>
+        <div class="focus-empty">Choose a seed song to begin.</div>
       </div>
 
-      <nav class="view-tabs" aria-label="Explorer views">
-        <button id="neighborsTab" class="tab-button active" type="button" data-view="neighbors">
-          <span>Neighbors</span>
+      <nav class="view-tabs" aria-label="Explorer views" role="tablist">
+        <button id="neighborsTab" class="tab-button active" type="button" role="tab" aria-selected="true" aria-controls="neighborsView" data-view="neighbors">
+          <span>Similar songs</span>
           <strong id="neighborsTabCount">0</strong>
         </button>
-        <button id="scalesTab" class="tab-button" type="button" data-view="scales">
-          <span>Pattern Lengths</span>
+        <button id="scalesTab" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="scalesView" data-view="scales">
+          <span>Compare lengths</span>
           <strong id="scalesTabCount">6</strong>
         </button>
-        <button id="evidenceTab" class="tab-button" type="button" data-view="evidence">
-          <span>Evidence</span>
+        <button id="evidenceTab" class="tab-button" type="button" role="tab" aria-selected="false" aria-controls="evidenceView" data-view="evidence">
+          <span>Why this match</span>
           <strong id="evidenceTabCount">0</strong>
         </button>
       </nav>
 
       <div class="view-stack">
-        <section id="neighborsView" class="view-panel active">
+        <section id="neighborsView" class="view-panel active" role="tabpanel" aria-labelledby="neighborsTab">
           <div class="panel-header">
             <div>
-              <p class="eyebrow">Nearest neighbors</p>
-              <h2>Similar Songs</h2>
+              <p class="eyebrow">Ranked by shared chord patterns</p>
+              <h2>Harmonic neighbors</h2>
             </div>
-            <div id="rankingModeNote" class="metric-note">Chord-pattern TF-IDF; no artist, genre, popularity, lyrics, or audio in the score</div>
+            <div id="rankingModeNote" class="metric-note">Harmonic TF-IDF cosine · metadata does not affect the score</div>
           </div>
-          <div id="resultsTable" class="results-table empty-state">
-            Pick a seed song to see neighbors ranked only by shared harmonic vocabulary.
+          <div id="resultsTable" class="results-table" aria-live="polite">
+            <div class="welcome-state">
+              <span class="welcome-mark">H3–H8</span>
+              <div>
+                <h3>Explore similarity you can explain</h3>
+                <p>Choose a seed song, compare its nearest harmonic neighbors, then open any match to inspect the shared progressions behind its score.</p>
+                <div class="journey" aria-label="Explorer workflow">
+                  <span><strong>1</strong> Search</span>
+                  <span aria-hidden="true">→</span>
+                  <span><strong>2</strong> Compare</span>
+                  <span aria-hidden="true">→</span>
+                  <span><strong>3</strong> Explain</span>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 
-        <section id="scalesView" class="view-panel">
+        <section id="scalesView" class="view-panel" role="tabpanel" aria-labelledby="scalesTab">
           <div class="panel-header">
             <div>
-              <p class="eyebrow">Single length rankings</p>
-              <h2>By Pattern Length</h2>
+              <p class="eyebrow">Sensitivity check</p>
+              <h2>Compare pattern lengths</h2>
             </div>
-            <div class="metric-note">Compare chord n-gram lengths</div>
+            <div class="metric-note">See how context length changes the ranking</div>
           </div>
           <div class="comparison-panel" id="comparisonPanel">
             <div class="empty-state">Fixed-n ranking comparison appears after a query.</div>
           </div>
         </section>
 
-        <section id="evidenceView" class="view-panel">
+        <section id="evidenceView" class="view-panel" role="tabpanel" aria-labelledby="evidenceTab">
           <div class="panel-header">
             <div>
-              <p class="eyebrow">Why this ranking?</p>
-              <h2>Harmonic Evidence</h2>
+              <p class="eyebrow">Model explanation</p>
+              <h2>Why this match?</h2>
             </div>
             <div id="pairLabel" class="metric-note"></div>
           </div>

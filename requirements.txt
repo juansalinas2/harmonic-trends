@@ -3,5 +3,6 @@ numpy
 tqdm
 duckdb
 matplotlib
+scikit-learn
 nbformat
 huggingface_hub

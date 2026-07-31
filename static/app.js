@@ -192,6 +192,20 @@ function updateToggle(button, enabled) {
   button.setAttribute("aria-pressed", String(enabled));
 }
 
+function updateRunButton(loading = false) {
+  const button = $("runButton");
+  button.disabled = loading || !state.selectedSong;
+  button.setAttribute("aria-busy", String(loading));
+  button.textContent = loading ? "Finding neighbors…" : "Find harmonic neighbors";
+}
+
+function updateSearchButton(loading = false) {
+  const button = $("searchButton");
+  button.disabled = loading;
+  button.setAttribute("aria-busy", String(loading));
+  button.textContent = loading ? "Searching…" : "Search";
+}
+
 function updateTabMetrics() {
   $("neighborsTabCount").textContent = fmt.format(state.results.length);
   $("scalesTabCount").textContent = fmt.format(state.activeScales.size);
@@ -204,7 +218,9 @@ function updateTabMetrics() {
 function setView(view) {
   state.currentView = view;
   document.querySelectorAll("[data-view]").forEach((button) => {
-    button.classList.toggle("active", button.dataset.view === view);
+    const active = button.dataset.view === view;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
   });
   document.querySelectorAll(".view-panel").forEach((panel) => {
     panel.classList.toggle("active", panel.id === `${view}View`);
@@ -223,14 +239,14 @@ function updateScoringButtons() {
     button.classList.toggle("active", isExactButton === state.exactScan);
   });
   $("scoringModeHelp").textContent = state.exactScan
-    ? "Exact mode scans every song sharing selected harmonic patterns. It is slower, but best for auditing suspicious rankings."
-    : "Fast mode finds candidates with rare shared patterns, then reranks them by exact harmonic TF-IDF cosine.";
+    ? "Exact mode scans every song with a selected pattern. It is slower and useful for auditing rankings."
+    : "Fast mode reranks a rare-pattern shortlist with exact harmonic TF-IDF cosine.";
 }
 
 function renderRankingMode(strategy = {}) {
   $("rankingModeNote").textContent = strategy.exact_scan
-    ? "Exact harmonic TF-IDF cosine over every matching song; no artist, genre, popularity, lyrics, or audio in the score"
-    : "Fast rare-pattern shortlist, then exact harmonic TF-IDF cosine rerank; no artist, genre, popularity, lyrics, or audio in the score";
+    ? "Exact harmonic TF-IDF cosine · metadata does not affect the score"
+    : "Rare-pattern shortlist + harmonic TF-IDF rerank · metadata does not affect the score";
 }
 
 function applyPreset(name) {
@@ -347,7 +363,7 @@ function spotifyLabelMarkup(song, options = {}) {
 
 function renderFocusBar() {
   if (!state.selectedSong) {
-    $("focusBar").innerHTML = `<div class="empty-state">Search for a recognizable seed song.</div>`;
+    $("focusBar").innerHTML = `<div class="focus-empty">Choose a seed song to begin.</div>`;
     return;
   }
 
@@ -360,11 +376,11 @@ function renderFocusBar() {
     </div>
     <div class="focus-arrow">→</div>
     <div class="focus-card ${result ? "" : "muted-card"}">
-      <span class="focus-kicker">Selected Neighbor</span>
+      <span class="focus-kicker">Selected match</span>
       ${result ? `
         <strong>${spotifyLabelMarkup(result, { fallbackTitle: `Song ${result.candidate_song_id}` })}</strong>
         <span class="song-meta">${score(result.similarity_score)} score · ${fmt.format(result.shared_features)} shared</span>
-      ` : `<span class="song-meta">Run a query or select a neighbor.</span>`}
+      ` : `<span class="song-meta">Choose a neighbor to inspect its evidence.</span>`}
     </div>
   `;
   hydrateSpotifyLabels($("focusBar"));
@@ -429,7 +445,7 @@ async function hydrateSpotifyLabels(container = document) {
 
 function renderSearchResults(results) {
   if (!results.length) {
-    const suffix = state.searchSpotifyOnly ? " Try turning off w/ Spotify ID." : "";
+    const suffix = state.searchSpotifyOnly ? " Try turning off Spotify links only." : "";
     $("searchResults").innerHTML = `<div class="empty-state">No indexed songs found.${suffix}</div>`;
     return;
   }
@@ -457,6 +473,7 @@ function renderSelectedSong(payload) {
   const totals = payload.totals || [];
   const coverage = totals.map((row) => `H${row.n} ${(row.indexed_window_coverage * 100).toFixed(0)}%`).join(" · ");
   $("selectedSong").innerHTML = `
+    <div class="selected-label">Selected seed</div>
     <div class="song-title">${spotifyLabelMarkup(song, { fallbackTitle: `Song ${song.song_id}` })}</div>
     <div class="song-meta">${songMeta(song)}</div>
     <div class="song-meta">${coverage}</div>
@@ -566,13 +583,13 @@ async function hydrateSpotifyNames(container) {
 }
 
 async function renderPreview(song) {
-  $("previewPanel").innerHTML = previewMarkup(song, "Selected Song Preview");
+  $("previewPanel").innerHTML = previewMarkup(song, "Seed song");
   bindChordButtons($("previewPanel"));
   await hydrateSpotifyNames($("previewPanel"));
 }
 
 async function renderCandidatePreview(song) {
-  $("candidatePreview").innerHTML = previewMarkup(song, "Selected Result Preview");
+  $("candidatePreview").innerHTML = previewMarkup(song, "Matched song");
   bindChordButtons($("candidatePreview"));
   await hydrateSpotifyNames($("candidatePreview"));
 }
@@ -583,13 +600,18 @@ async function search() {
     state.featuredArtist = featuredArtists.includes(q) ? q : "";
     renderFeaturedArtists();
   }
-  $("searchResults").innerHTML = `<div class="empty-state">Searching...</div>`;
-  const payload = await api("/api/search", {
-    q,
-    limit: 20,
-    spotify: spotifyMode(state.searchSpotifyOnly)
-  });
-  renderSearchResults(payload.results);
+  updateSearchButton(true);
+  $("searchResults").innerHTML = `<div class="empty-state">Searching…</div>`;
+  try {
+    const payload = await api("/api/search", {
+      q,
+      limit: 20,
+      spotify: spotifyMode(state.searchSpotifyOnly)
+    });
+    renderSearchResults(payload.results);
+  } finally {
+    updateSearchButton(false);
+  }
 }
 
 async function selectSong(songId) {
@@ -597,6 +619,7 @@ async function selectSong(songId) {
   state.selectedSong = payload.song;
   state.selectedResult = null;
   state.results = [];
+  updateRunButton();
   updateTabMetrics();
   renderEvidenceEmpty();
   renderFocusBar();
@@ -608,7 +631,7 @@ function renderResults(results) {
   state.results = results;
   updateTabMetrics();
   if (!results.length) {
-    const suffix = state.resultSpotifyOnly ? " Try turning off Neighbors w/ Spotify ID." : "";
+    const suffix = state.resultSpotifyOnly ? " Try turning off Spotify links only." : "";
     $("resultsTable").innerHTML = `<div class="empty-state">No candidates matched the current scale and shared-feature settings.${suffix}</div>`;
     state.selectedResult = null;
     updateTabMetrics();
@@ -659,25 +682,30 @@ async function runSimilarity() {
     return;
   }
 
-  $("resultsTable").innerHTML = `<div class="empty-state">Computing harmonic neighbors...</div>`;
+  updateRunButton(true);
+  $("resultsTable").innerHTML = `<div class="empty-state">Computing harmonic neighbors…</div>`;
   state.selectedResult = null;
   updateTabMetrics();
   renderEvidenceEmpty();
-  const payload = await api("/api/similar", {
-    song_id: state.selectedSong.song_id,
-    ns: selectedNs().join(","),
-    weights: weightParam(),
-    top_k: $("topKInput").value,
-    min_shared: $("minSharedInput").value,
-    spotify: spotifyMode(state.resultSpotifyOnly),
-    exclude_same_artist: state.excludeSameArtist ? "1" : "0",
-    cross_genre: state.crossGenreOnly ? "1" : "0",
-    exact: state.exactScan ? "1" : "0"
-  });
-  renderRankingMode(payload.strategy);
-  renderResults(payload.results);
-  loadComparison();
-  if (payload.results.length) selectResult(payload.results[0]);
+  try {
+    const payload = await api("/api/similar", {
+      song_id: state.selectedSong.song_id,
+      ns: selectedNs().join(","),
+      weights: weightParam(),
+      top_k: $("topKInput").value,
+      min_shared: $("minSharedInput").value,
+      spotify: spotifyMode(state.resultSpotifyOnly),
+      exclude_same_artist: state.excludeSameArtist ? "1" : "0",
+      cross_genre: state.crossGenreOnly ? "1" : "0",
+      exact: state.exactScan ? "1" : "0"
+    });
+    renderRankingMode(payload.strategy);
+    renderResults(payload.results);
+    loadComparison();
+    if (payload.results.length) selectResult(payload.results[0]);
+  } finally {
+    updateRunButton(false);
+  }
 }
 
 async function loadComparison() {
@@ -728,7 +756,7 @@ async function selectResult(result, openEvidence = false) {
   renderResults(state.results);
   renderFocusBar();
   if (openEvidence) setView("evidence");
-  $("pairLabel").textContent = `Song ${state.selectedSong.song_id} -> Song ${result.candidate_song_id}`;
+  $("pairLabel").textContent = `Song ${state.selectedSong.song_id} → Song ${result.candidate_song_id}`;
   $("candidatePreview").innerHTML = `<div class="empty-state">Loading selected result preview...</div>`;
   $("evidenceSummary").innerHTML = "";
   $("evidenceTable").innerHTML = `<div class="empty-state">Loading harmonic evidence...</div>`;
@@ -876,6 +904,7 @@ async function init() {
   updateToggle($("crossGenreToggle"), state.crossGenreOnly);
   updatePresetButtons();
   updateScoringButtons();
+  updateRunButton();
   renderFeaturedArtists();
   renderFocusBar();
   updateTabMetrics();
