@@ -1,14 +1,34 @@
 # Harmonic Trends
 
-**Can chord progressions alone reveal musical style?**
+**Musical styles leave fingerprints in chord progressions.**
 
-Yes—but only part of it. Harmonic Trends turns 679,807 song-level chord
-sequences into key-invariant features, tests them on unseen artists, and uses
-them to power an explainable song-similarity explorer.
+Harmonic Trends tests that claim across 679,807 songs. It discovers
+genre-specific patterns, improves genre and decade prediction on unseen artists,
+and ships the resulting representation in an explainable similarity explorer.
 
 [**Try the live explorer**](https://huggingface.co/spaces/juansalinas2/harmonic-trends-explorer)
 · [View the benchmark](notebooks/13_genre_decade_classification_benchmark.ipynb)
 · [Read the visual analysis](notebooks/09_ultimate_harmonic_eda.ipynb)
+
+| Songs | Artists | Genres | Indexed feature rows |
+|---:|---:|---:|---:|
+| **679,807** | **91,556** | **12** | **67.0M** |
+
+## What 679,807 songs reveal
+
+Jazz's strongest supported harmonic fingerprint appears **31.7× more often** in
+jazz than outside it. Soul reaches **30.0×** and reggae **25.8×**. These are not
+simply popular progressions: lift isolates patterns that are unusually
+characteristic of each genre.
+
+[![Most distinctive harmonic n-gram by genre](docs/assets/genre_distinctive_ngrams.png)](notebooks/09_ultimate_harmonic_eda.ipynb)
+
+## Summary
+
+Chord progressions provide a measurable, interpretable signal for genre, era,
+and song similarity. Harmony is not a complete recommender by itself; its most
+practical role is strengthening a larger system as a retrieval feature, ranking
+input, diversity signal, or explanation layer.
 
 ## Project success
 
@@ -50,8 +70,6 @@ a complete description of either.
 4. **Similar harmonic usage creates useful neighborhoods.** Co-occurrence
    embeddings group patterns used in similar song contexts, while the deployed
    search index retrieves songs by shared `H3`–`H8` features.
-
-![Most distinctive harmonic n-gram by genre](docs/assets/genre_distinctive_ngrams.png)
 
 ## How it works
 
@@ -99,8 +117,17 @@ Open `http://127.0.0.1:8000`.
 
 - Genre labels are broad and assigned at the artist level.
 - The benchmark is sampled for laptop-friendly runtime.
-- Published Chordonomicon results are not directly comparable until their exact
-  evaluation protocol is reproduced.
+- Harmony describes only one part of musical identity and listener preference.
+
+## Future work
+
+- Add harmonic similarity to a hybrid recommender alongside audio, lyrics,
+  metadata, and collaborative signals.
+- Measure whether it improves candidate retrieval, ranking, diversity, and
+  recommendation explanations—not just genre and decade prediction.
+- Compare `H3`–`H8` representations on one fixed split and reproduce the
+  Chordonomicon paper's evaluation protocol.
+- Validate recommendation quality with listening outcomes and user studies.
 
 ## Data source
 
