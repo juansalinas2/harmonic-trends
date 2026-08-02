@@ -1,7 +1,9 @@
 # Harmonic Trends
+Main Question:
 
-**Musical styles leave fingerprints in chord progressions.**
+Can harmony be treated as a learnable vocabulary, then used to understand musical style, change over time, and recommend songs by how they move harmonically?
 
+Musical styles leave fingerprints in chord progressions.
 Harmonic Trends tests that claim across 679,807 songs. It discovers
 genre-specific patterns, improves genre and decade prediction on unseen artists,
 and ships the resulting representation in an explainable similarity explorer.
