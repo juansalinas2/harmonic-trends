@@ -1,7 +1,7 @@
 # Harmonic Trends
 Main Question:
 
-Can harmony be treated as a learnable vocabulary, then used to understand musical style, change over time, and recommend songs by how they move harmonically?
+> Can harmony be treated as a learnable vocabulary, then used to understand musical style, change over time, and recommend songs by how they move harmonically?
 
 Musical styles leave fingerprints in chord progressions.
 Harmonic Trends tests that claim across 679,807 songs. It discovers
